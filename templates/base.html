@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Data Insighter{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gridstack@7.2.3/dist/gridstack-all.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/gridstack@7.2.3/dist/gridstack.min.css" rel="stylesheet"/>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Notification Container -->
+    <div id="notification-container"></div>
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="{{ url_for('index') }}" class="nav-brand">
+                <span class="brand-text">Data Insighter</span>
+            </a>
+            <div class="nav-links">
+                <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">
+                    <i class="fas fa-home"></i>
+                    <span>Home</span>
+                </a>
+                <a href="{{ url_for('upload') }}" class="nav-link {% if request.endpoint == 'upload' %}active{% endif %}">
+                    <i class="fas fa-upload"></i>
+                    <span>Upload</span>
+                </a>
+                <a href="{{ url_for('analysis') }}" class="nav-link {% if request.endpoint == 'analysis' %}active{% endif %}">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Analysis</span>
+                </a>
+                <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </a>
+                {% if session.get('user') %}
+                <a href="{{ url_for('logout') }}" class="nav-link" style="margin-left: auto;">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- Page Header -->
+    {% if self.page_header() %}
+    <header class="page-header">
+        <div class="header-content">
+            {% block page_header %}{% endblock %}
+        </div>
+    </header>
+    {% endif %}
+
+    <!-- Main Content -->
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Updated Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <h2 class="footer-title">Data Insighter</h2>
+                <p class="footer-description">Transform your data into actionable insights</p>
+            </div>
+            
+            <div class="footer-section">
+                <h3 class="footer-heading">Quick Links</h3>
+                <ul class="footer-links">
+                    <li><a href="{{ url_for('index') }}">Home</a></li>
+                    <li><a href="{{ url_for('upload') }}">Upload Data</a></li>
+                    <li><a href="{{ url_for('analysis') }}">Analysis</a></li>
+                    <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-section">
+                <h3 class="footer-heading">Resources</h3>
+                <ul class="footer-links">
+                    <li><a href="/documentation">Documentation</a></li>
+                    <li><a href="/tutorials">Tutorials</a></li>
+                    <li><a href="/api">API</a></li>
+                    <li><a href="/support">Support</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2024 Data Insighter. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Notification System -->
+    <div id="notification-container"></div>
+
+    <!-- Base Scripts -->
+    <script>
+        // Global notification function
+        window.showNotification = function(message, type = 'info') {
+            const container = document.getElementById('notification-container');
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : 
+                                type === 'error' ? 'exclamation-circle' : 
+                                'info-circle'}"></i>
+                <span>${message}</span>
+            `;
+            
+            container.appendChild(notification);
+            
+            // Force a reflow to ensure animation plays
+            notification.offsetHeight;
+            
+            // Set timeout for fade out
+            setTimeout(() => {
+                notification.classList.add('fade-out');
+                setTimeout(() => {
+                    notification.remove();
+                }, 500); // Remove after fade out animation completes
+            }, 3000); // Start fade out after 3 seconds
+        }
+
+        // Utility functions for different notification types
+        window.showError = function(message) {
+            showNotification(message, 'error');
+        }
+
+        window.showSuccess = function(message) {
+            showNotification(message, 'success');
+        }
+
+        window.showInfo = function(message) {
+            showNotification(message, 'info');
+        }
+
+        // Store a flag in sessionStorage to track if we're in a redirect loop
+        function handlePageRefresh() {
+            // Check if this is an actual refresh vs a redirect
+            const navEntry = performance.getEntriesByType('navigation')[0];
+            const isRefresh = navEntry && navEntry.type === 'reload';
+            const isBackForward = navEntry && (navEntry.type === 'back_forward');
+            
+            // Only clear session on actual user refresh, not redirects
+            if (isRefresh && !sessionStorage.getItem('redirecting')) {
+                sessionStorage.setItem('redirecting', 'true');
+                clearSessionAndRedirect();
+            } else if (!isRefresh && !isBackForward) {
+                // Reset the flag if this is a normal navigation
+                sessionStorage.removeItem('redirecting');
+            }
+        }
+
+        // Function to clear session and redirect
+        function clearSessionAndRedirect() {
+            fetch('/clear_session', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    sessionStorage.removeItem('redirecting');
+                    if (window.location.pathname !== '/') {
+                        window.location.href = '/';
+                    }
+                } else {
+                    console.error('Error clearing session:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                sessionStorage.removeItem('redirecting');
+            });
+        }
+
+        // Execute refresh check
+        handlePageRefresh();
+
+        // Navigation Toggle
+        document.querySelector('.nav-toggle')?.addEventListener('click', () => {
+            document.querySelector('.nav-links').classList.toggle('show');
+        });
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html> 

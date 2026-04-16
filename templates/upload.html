@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Data - Data Insighter{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="upload-container">
+    <div class="upload-content-grid">
+        <!-- Upload Area -->
+        <div class="card">
+            <h2 class="upload-title">Upload Your Data</h2>
+            <div class="upload-area" id="dropZone">
+                <div class="upload-content">
+                    <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                    <h3>Drag & Drop Files</h3>
+                    <p>or</p>
+                    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                        Browse Files
+                    </button>
+                    <input type="file" id="fileInput" accept=".csv,.json" hidden>
+                    <p class="file-info">Supported formats: CSV, JSON (max 16MB)</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sample Datasets Section -->
+    <div class="sample-datasets-section">
+        <h2>Try Sample Datasets</h2>
+        <div class="sample-datasets-grid">
+            {% for dataset in sample_datasets %}
+            <div class="sample-dataset-card">
+                <div class="dataset-icon">
+                    <i class="fas fa-table"></i>
+                </div>
+                <h3>{{ dataset.split('.')[0]|replace('_', ' ')|title }}</h3>
+                <p>Explore pre-loaded dataset for quick start</p>
+                <button class="btn btn-primary sample-link" data-filename="{{ dataset }}">
+                    Use Dataset
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+        <div class="spinner"></div>
+        <p>Processing file...</p>
+    </div>
+
+    <!-- Data Preview Section -->
+    <div id="dataPreview" class="data-preview" style="display: none;">
+        <!-- Summary Section -->
+        <div class="data-summary">
+            <h3>Data Summary</h3>
+            <div id="summaryInfo" class="summary-info"></div>
+        </div>
+
+        <!-- Preview Table Section -->
+        <div class="preview-section">
+            <h3>Data Sample (First 10 rows)</h3>
+            <div class="table-container">
+                <div id="previewTable"></div>
+            </div>
+        </div>
+
+        <!-- Column Selection Section -->
+        <div class="column-selection">
+            <h3>Select Columns for Analysis</h3>
+            <div class="column-search">
+                <input type="text" id="columnSearch" placeholder="Search columns...">
+                <div class="column-actions">
+                    <button id="selectAll" class="btn btn-small">Select All</button>
+                    <button id="deselectAll" class="btn btn-small">Clear All</button>
+                </div>
+            </div>
+            <div id="columnList" class="column-list"></div>
+            <button id="proceedButton" class="btn btn-primary" disabled>
+                Proceed to Analysis
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+.upload-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.upload-title {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.upload-area {
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    padding: 40px;
+    text-align: center;
+    margin-bottom: 20px;
+    background: #f8f9fa;
+    transition: all 0.3s ease;
+}
+
+.upload-area.dragover {
+    border-color: #007bff;
+    background: #e7f1ff;
+}
+
+.upload-icon {
+    font-size: 48px;
+    color: #007bff;
+    margin-bottom: 20px;
+}
+
+/* Sample Datasets Section Styles */
+.sample-datasets-section {
+    margin-top: 40px;
+}
+
+.sample-datasets-section h2 {
+    color: #333;
+    margin-bottom: 30px;
+}
+
+.sample-datasets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+    margin-top: 20px;
+}
+
+.sample-dataset-card {
+    background: white;
+    border-radius: 10px;
+    padding: 30px;
+    text-align: center;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
+}
+
+.sample-dataset-card:hover {
+    transform: translateY(-5px);
+}
+
+.dataset-icon {
+    font-size: 40px;
+    color: #ff9800;
+    margin-bottom: 20px;
+}
+
+.sample-dataset-card h3 {
+    color: #333;
+    margin-bottom: 10px;
+}
+
+.sample-dataset-card p {
+    color: #666;
+    margin-bottom: 20px;
+}
+
+.sample-dataset-card .btn {
+    width: auto;
+    padding: 10px 20px;
+}
+
+/* Rest of the existing styles */
+.loading-indicator {
+    text-align: center;
+    margin: 20px 0;
+}
+
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #007bff;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 10px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.data-preview {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-top: 20px;
+}
+
+.data-summary {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 6px;
+}
+
+.summary-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.table-container {
+    overflow-x: auto;
+    margin: 15px 0;
+}
+
+.preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.preview-table th,
+.preview-table td {
+    padding: 8px;
+    border: 1px solid #ddd;
+    text-align: left;
+}
+
+.preview-table th {
+    background: #f8f9fa;
+    font-weight: bold;
+}
+
+.column-selection {
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    margin-top: 20px;
+}
+
+.column-search {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.column-search input {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.column-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.column-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    background: white;
+}
+
+.column-item {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+}
+
+.column-item:last-child {
+    border-bottom: none;
+}
+
+.column-item label {
+    margin: 0;
+    cursor: pointer;
+}
+
+.column-item input[type="checkbox"] {
+    margin-right: 10px;
+}
+
+#proceedButton {
+    display: block;
+    width: auto;
+    min-width: 200px;
+    margin: 20px auto 0;
+    padding: 10px 30px;
+}
+
+.btn-small {
+    padding: 4px 8px;
+    font-size: 14px;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/upload.js') }}"></script>
+{% endblock %} 

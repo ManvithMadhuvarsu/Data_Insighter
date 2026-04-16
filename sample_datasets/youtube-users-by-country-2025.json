@@ -1,0 +1,698 @@
+[
+  {
+    "flagCode": "IN",
+    "country": "India",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 462000000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 61.5,
+    "YouTubeUsersJuly2023": 467,
+    "YouTubeUsersPenetrationJuly2023": 36.2
+  },
+  {
+    "flagCode": "US",
+    "country": "United States",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 239000000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 72.2,
+    "YouTubeUsersJuly2023": 246,
+    "YouTubeUsersPenetrationJuly2023": 78.3
+  },
+  {
+    "flagCode": "BR",
+    "country": "Brazil",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 144000000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 76.6,
+    "YouTubeUsersJuly2023": 142,
+    "YouTubeUsersPenetrationJuly2023": 72.9
+  },
+  {
+    "flagCode": "ID",
+    "country": "Indonesia",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 139000000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 75,
+    "YouTubeUsersJuly2023": 139,
+    "YouTubeUsersPenetrationJuly2023": 55
+  },
+  {
+    "flagCode": "MX",
+    "country": "Mexico",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 83100000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 77.5,
+    "YouTubeUsersJuly2023": 81.8,
+    "YouTubeUsersPenetrationJuly2023": 71.1
+  },
+  {
+    "flagCode": "JP",
+    "country": "Japan",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 78600000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 75.3,
+    "YouTubeUsersJuly2023": 78.4,
+    "YouTubeUsersPenetrationJuly2023": 70.8
+  },
+  {
+    "flagCode": "PK",
+    "country": "Pakistan",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 71700000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 64.6,
+    "YouTubeUsersJuly2023": 71.7,
+    "YouTubeUsersPenetrationJuly2023": 38.9
+  },
+  {
+    "flagCode": "DE",
+    "country": "Germany",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 67800000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 87.3,
+    "YouTubeUsersJuly2023": 70.9,
+    "YouTubeUsersPenetrationJuly2023": 89.9
+  },
+  {
+    "flagCode": "VN",
+    "country": "Vietnam",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 63000000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 80.3,
+    "YouTubeUsersJuly2023": 63,
+    "YouTubeUsersPenetrationJuly2023": 68.1
+  },
+  {
+    "flagCode": "TR",
+    "country": "Turkey",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 57500000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 77.3,
+    "YouTubeUsersJuly2023": 57.9,
+    "YouTubeUsersPenetrationJuly2023": 73.9
+  },
+  {
+    "flagCode": "GB",
+    "country": "United Kingdom",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 56200000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 84.7,
+    "YouTubeUsersJuly2023": 57.1,
+    "YouTubeUsersPenetrationJuly2023": 91.9
+  },
+  {
+    "flagCode": "FR",
+    "country": "France",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 50700000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 83.4,
+    "YouTubeUsersJuly2023": 52.1,
+    "YouTubeUsersPenetrationJuly2023": 88.8
+  },
+  {
+    "flagCode": "EG",
+    "country": "Egypt",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 44700000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 54.5,
+    "YouTubeUsersJuly2023": 45.9,
+    "YouTubeUsersPenetrationJuly2023": 50.6
+  },
+  {
+    "flagCode": "KR",
+    "country": "South Korea",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 44300000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 88.1,
+    "YouTubeUsersJuly2023": 46,
+    "YouTubeUsersPenetrationJuly2023": 91.6
+  },
+  {
+    "flagCode": "TH",
+    "country": "Thailand",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 44200000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 69.9,
+    "YouTubeUsersJuly2023": 43.9,
+    "YouTubeUsersPenetrationJuly2023": 63.3
+  },
+  {
+    "flagCode": "IT",
+    "country": "Italy",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 42800000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 83,
+    "YouTubeUsersJuly2023": 43.9,
+    "YouTubeUsersPenetrationJuly2023": 78.3
+  },
+  {
+    "flagCode": "ES",
+    "country": "Spain",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 39700000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 87.1,
+    "YouTubeUsersJuly2023": 40.7,
+    "YouTubeUsersPenetrationJuly2023": 90.1
+  },
+  {
+    "flagCode": "BD",
+    "country": "Bangladesh",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 33600000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 43.4,
+    "YouTubeUsersJuly2023": 34.4,
+    "YouTubeUsersPenetrationJuly2023": 23.2
+  },
+  {
+    "flagCode": "CA",
+    "country": "Canada",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 31900000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 86.8,
+    "YouTubeUsersJuly2023": 33.1,
+    "YouTubeUsersPenetrationJuly2023": 90.6
+  },
+  {
+    "flagCode": "AR",
+    "country": "Argentina",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 31300000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 77.1,
+    "YouTubeUsersJuly2023": 31.8,
+    "YouTubeUsersPenetrationJuly2023": 77.6
+  },
+  {
+    "flagCode": "CO",
+    "country": "Colombia",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 30300000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 76.7,
+    "YouTubeUsersJuly2023": 30.7,
+    "YouTubeUsersPenetrationJuly2023": 64.2
+  },
+  {
+    "flagCode": "NG",
+    "country": "Nigeria",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 28500000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 27.7,
+    "YouTubeUsersJuly2023": 31.6,
+    "YouTubeUsersPenetrationJuly2023": 25.2
+  },
+  {
+    "flagCode": "SA",
+    "country": "Saudi Arabia",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 28300000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 76.8,
+    "YouTubeUsersJuly2023": 29.1,
+    "YouTubeUsersPenetrationJuly2023": 90.8
+  },
+  {
+    "flagCode": "PL",
+    "country": "Poland",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 27900000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 78,
+    "YouTubeUsersJuly2023": 27.5,
+    "YouTubeUsersPenetrationJuly2023": 71.4
+  },
+  {
+    "flagCode": "ZA",
+    "country": "South Africa",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 25100000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 55.4,
+    "YouTubeUsersJuly2023": 25.8,
+    "YouTubeUsersPenetrationJuly2023": 56
+  },
+  {
+    "flagCode": "UA",
+    "country": "Ukraine",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 24300000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 82,
+    "YouTubeUsersJuly2023": 26.7,
+    "YouTubeUsersPenetrationJuly2023": 76.1
+  },
+  {
+    "flagCode": "MY",
+    "country": "Malaysia",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 24100000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 71.7,
+    "YouTubeUsersJuly2023": 23.9,
+    "YouTubeUsersPenetrationJuly2023": 79.6
+  },
+  {
+    "flagCode": "DZ",
+    "country": "Algeria",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 22800000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 68.1,
+    "YouTubeUsersJuly2023": 22.7,
+    "YouTubeUsersPenetrationJuly2023": 65.1
+  },
+  {
+    "flagCode": "IQ",
+    "country": "Iraq",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 22800000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 62.9,
+    "YouTubeUsersJuly2023": 24.3,
+    "YouTubeUsersPenetrationJuly2023": 72
+  },
+  {
+    "flagCode": "PH",
+    "country": "Philippines",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 21350000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 24.5,
+    "YouTubeUsersJuly2023": 57.7,
+    "YouTubeUsersPenetrationJuly2023": 61.4
+  },
+  {
+    "flagCode": "MA",
+    "country": "Morocco",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 21200000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 61.5,
+    "YouTubeUsersJuly2023": 21.3,
+    "YouTubeUsersPenetrationJuly2023": 68.3
+  },
+  {
+    "flagCode": "AU",
+    "country": "Australia",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 20800000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 82.5,
+    "YouTubeUsersJuly2023": 21.3,
+    "YouTubeUsersPenetrationJuly2023": 87
+  },
+  {
+    "flagCode": "TW",
+    "country": "Taiwan",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 19200000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 88.5,
+    "YouTubeUsersJuly2023": 20.2,
+    "YouTubeUsersPenetrationJuly2023": 87.4
+  },
+  {
+    "flagCode": "PE",
+    "country": "Peru",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 17600000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 68.3,
+    "YouTubeUsersJuly2023": 17.6,
+    "YouTubeUsersPenetrationJuly2023": 57.3
+  },
+  {
+    "flagCode": "CL",
+    "country": "Chile",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 15200000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 85,
+    "YouTubeUsersJuly2023": 15.4,
+    "YouTubeUsersPenetrationJuly2023": 85.3
+  },
+  {
+    "flagCode": "NL",
+    "country": "Netherlands",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 15000000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 85.9,
+    "YouTubeUsersJuly2023": 15.5,
+    "YouTubeUsersPenetrationJuly2023": 92.6
+  },
+  {
+    "flagCode": "RO",
+    "country": "Romania",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 13300000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 73.6,
+    "YouTubeUsersJuly2023": 13.5,
+    "YouTubeUsersPenetrationJuly2023": 72.9
+  },
+  {
+    "flagCode": "EC",
+    "country": "Ecuador",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 11700000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 76.5,
+    "YouTubeUsersJuly2023": 11.7,
+    "YouTubeUsersPenetrationJuly2023": 74
+  },
+  {
+    "flagCode": "KE",
+    "country": "Kenya",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 9790000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 43.1,
+    "YouTubeUsersJuly2023": 9.44,
+    "YouTubeUsersPenetrationJuly2023": 25.4
+  },
+  {
+    "flagCode": "BE",
+    "country": "Belgium",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 9170000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 82.3,
+    "YouTubeUsersJuly2023": 9.44,
+    "YouTubeUsersPenetrationJuly2023": 87.6
+  },
+  {
+    "flagCode": "AE",
+    "country": "United Arab Emirates",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 8820000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 93.2,
+    "YouTubeUsersJuly2023": 8.99,
+    "YouTubeUsersPenetrationJuly2023": 98.5
+  },
+  {
+    "flagCode": "SE",
+    "country": "Sweden",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 8530000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 81.7,
+    "YouTubeUsersJuly2023": 8.7,
+    "YouTubeUsersPenetrationJuly2023": 90
+  },
+  {
+    "flagCode": "CZ",
+    "country": "Czech Republic",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 8050000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 82.7,
+    "YouTubeUsersJuly2023": 8.07,
+    "YouTubeUsersPenetrationJuly2023": 83.5
+  },
+  {
+    "flagCode": "PT",
+    "country": "Portugal",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 7430000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 84,
+    "YouTubeUsersJuly2023": 7.43,
+    "YouTubeUsersPenetrationJuly2023": 75.5
+  },
+  {
+    "flagCode": "GR",
+    "country": "Greece",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 7400000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 83.1,
+    "YouTubeUsersJuly2023": 7.49,
+    "YouTubeUsersPenetrationJuly2023": 76.2
+  },
+  {
+    "flagCode": "GT",
+    "country": "Guatemala",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 7340000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 66.8,
+    "YouTubeUsersJuly2023": 7.64,
+    "YouTubeUsersPenetrationJuly2023": 53.4
+  },
+  {
+    "flagCode": "AT",
+    "country": "Austria",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 7320000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 85.3,
+    "YouTubeUsersJuly2023": 7.34,
+    "YouTubeUsersPenetrationJuly2023": 86.8
+  },
+  {
+    "flagCode": "HU",
+    "country": "Hungary",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 7290000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 78.9,
+    "YouTubeUsersJuly2023": 7.4,
+    "YouTubeUsersPenetrationJuly2023": 77.9
+  },
+  {
+    "flagCode": "LK",
+    "country": "Sri Lanka",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 7230000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 58.6,
+    "YouTubeUsersJuly2023": 7.04,
+    "YouTubeUsersPenetrationJuly2023": 36.9
+  },
+  {
+    "flagCode": "DO",
+    "country": "Dominican Republic",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 7230000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 71.3,
+    "YouTubeUsersJuly2023": 7.39,
+    "YouTubeUsersPenetrationJuly2023": 77.4
+  },
+  {
+    "flagCode": "TN",
+    "country": "Tunisia",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 7120000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 71.5,
+    "YouTubeUsersJuly2023": 7.24,
+    "YouTubeUsersPenetrationJuly2023": 71.3
+  },
+  {
+    "flagCode": "IL",
+    "country": "Israel",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 6920000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 81.3,
+    "YouTubeUsersJuly2023": 7.06,
+    "YouTubeUsersPenetrationJuly2023": 91
+  },
+  {
+    "flagCode": "CH",
+    "country": "Switzerland",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 6920000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 79.2,
+    "YouTubeUsersJuly2023": 7.29,
+    "YouTubeUsersPenetrationJuly2023": 88.4
+  },
+  {
+    "flagCode": "GH",
+    "country": "Ghana",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 6870000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 28.6,
+    "YouTubeUsersJuly2023": 6.92,
+    "YouTubeUsersPenetrationJuly2023": 32.7
+  },
+  {
+    "flagCode": "HK",
+    "country": "Hong Kong",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 6460000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 90.1,
+    "YouTubeUsersJuly2023": 6.73,
+    "YouTubeUsersPenetrationJuly2023": 91.3
+  },
+  {
+    "flagCode": "JO",
+    "country": "Jordan",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 6380000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 61.7,
+    "YouTubeUsersJuly2023": 6.61,
+    "YouTubeUsersPenetrationJuly2023": 74
+  },
+  {
+    "flagCode": "BO",
+    "country": "Bolivia",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 5570000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 60.9,
+    "YouTubeUsersJuly2023": 5.88,
+    "YouTubeUsersPenetrationJuly2023": 58.1
+  },
+  {
+    "flagCode": "SG",
+    "country": "Singapore",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 5130000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 88.6,
+    "YouTubeUsersJuly2023": 5.08,
+    "YouTubeUsersPenetrationJuly2023": 85.8
+  },
+  {
+    "flagCode": "RS",
+    "country": "Serbia",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 5000000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 78.1,
+    "YouTubeUsersJuly2023": 5.01,
+    "YouTubeUsersPenetrationJuly2023": 72.2
+  },
+  {
+    "flagCode": "DK",
+    "country": "Denmark",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 4720000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 80.5,
+    "YouTubeUsersJuly2023": 4.94,
+    "YouTubeUsersPenetrationJuly2023": 90
+  },
+  {
+    "flagCode": "LB",
+    "country": "Lebanon",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 4520000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 95,
+    "YouTubeUsersJuly2023": 4.91,
+    "YouTubeUsersPenetrationJuly2023": 112.3
+  },
+  {
+    "flagCode": "NO",
+    "country": "Norway",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 4490000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 82.5,
+    "YouTubeUsersJuly2023": 4.62,
+    "YouTubeUsersPenetrationJuly2023": 91.9
+  },
+  {
+    "flagCode": "HN",
+    "country": "Honduras",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 4460000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 63.4,
+    "YouTubeUsersJuly2023": 4.39,
+    "YouTubeUsersPenetrationJuly2023": 51.4
+  },
+  {
+    "flagCode": "FI",
+    "country": "Finland",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 4460000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 82.2,
+    "YouTubeUsersJuly2023": 4.62,
+    "YouTubeUsersPenetrationJuly2023": 88.6
+  },
+  {
+    "flagCode": "BG",
+    "country": "Bulgaria",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 4440000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 79.6,
+    "YouTubeUsersJuly2023": 4.42,
+    "YouTubeUsersPenetrationJuly2023": 69.2
+  },
+  {
+    "flagCode": "PY",
+    "country": "Paraguay",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 4220000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 75.2,
+    "YouTubeUsersJuly2023": 4.47,
+    "YouTubeUsersPenetrationJuly2023": 83.4
+  },
+  {
+    "flagCode": "SK",
+    "country": "Slovakia",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 4160000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 79.2,
+    "YouTubeUsersJuly2023": 4.16,
+    "YouTubeUsersPenetrationJuly2023": 76.8
+  },
+  {
+    "flagCode": "NZ",
+    "country": "New Zealand",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 4130000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 82.2,
+    "YouTubeUsersJuly2023": 4.24,
+    "YouTubeUsersPenetrationJuly2023": 88.6
+  },
+  {
+    "flagCode": "IE",
+    "country": "Ireland",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 4010000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 79.8,
+    "YouTubeUsersJuly2023": 4.02,
+    "YouTubeUsersPenetrationJuly2023": 88.5
+  },
+  {
+    "flagCode": "OM",
+    "country": "Oman",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 3970000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 86.7,
+    "YouTubeUsersJuly2023": 4.17,
+    "YouTubeUsersPenetrationJuly2023": 107.6
+  },
+  {
+    "flagCode": "CR",
+    "country": "Costa Rica",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 3860000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 79.8,
+    "YouTubeUsersJuly2023": 3.83,
+    "YouTubeUsersPenetrationJuly2023": 80.9
+  },
+  {
+    "flagCode": "SN",
+    "country": "Senegal",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 3710000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 34.4,
+    "YouTubeUsersJuly2023": 3.71,
+    "YouTubeUsersPenetrationJuly2023": 34.7
+  },
+  {
+    "flagCode": "SV",
+    "country": "El Salvador",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 3570000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 78,
+    "YouTubeUsersJuly2023": 3.51,
+    "YouTubeUsersPenetrationJuly2023": 62
+  },
+  {
+    "flagCode": "KW",
+    "country": "Kuwait",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 3460000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 80.7,
+    "YouTubeUsersJuly2023": 3.59,
+    "YouTubeUsersPenetrationJuly2023": 91.4
+  },
+  {
+    "flagCode": "NI",
+    "country": "Nicaragua",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 2930000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 67.2,
+    "YouTubeUsersJuly2023": 2.97,
+    "YouTubeUsersPenetrationJuly2023": 53.6
+  },
+  {
+    "flagCode": "HR",
+    "country": "Croatia",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 2790000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 82.7,
+    "YouTubeUsersJuly2023": 2.94,
+    "YouTubeUsersPenetrationJuly2023": 76.5
+  },
+  {
+    "flagCode": "QA",
+    "country": "Qatar",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 2570000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 95.2,
+    "YouTubeUsersJuly2023": 2.62,
+    "YouTubeUsersPenetrationJuly2023": 102.5
+  },
+  {
+    "flagCode": "UY",
+    "country": "Uruguay",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 2500000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 81.3,
+    "YouTubeUsersJuly2023": 2.45,
+    "YouTubeUsersPenetrationJuly2023": 78
+  },
+  {
+    "flagCode": "PA",
+    "country": "Panama",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 2450000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 69.2,
+    "YouTubeUsersJuly2023": 2.48,
+    "YouTubeUsersPenetrationJuly2023": 63.5
+  },
+  {
+    "flagCode": "PR",
+    "country": "Puerto Rico",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 2310000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 83.4,
+    "YouTubeUsersJuly2023": 2.22,
+    "YouTubeUsersPenetrationJuly2023": 72.7
+  },
+  {
+    "flagCode": "BA",
+    "country": "Bosnia and Herzegovina",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 2160000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 80.9,
+    "YouTubeUsersJuly2023": 2.2,
+    "YouTubeUsersPenetrationJuly2023": 74.1
+  },
+  {
+    "flagCode": "LT",
+    "country": "Lithuania",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 2100000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 87.2,
+    "YouTubeUsersJuly2023": 2.12,
+    "YouTubeUsersPenetrationJuly2023": 82.4
+  },
+  {
+    "flagCode": "SI",
+    "country": "Slovenia",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 1630000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 83.7,
+    "YouTubeUsersJuly2023": 1.64,
+    "YouTubeUsersPenetrationJuly2023": 83
+  },
+  {
+    "flagCode": "LV",
+    "country": "Latvia",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 1460000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 86.3,
+    "YouTubeUsersJuly2023": 1.48,
+    "YouTubeUsersPenetrationJuly2023": 86.6
+  },
+  {
+    "flagCode": "BH",
+    "country": "Bahrain",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 1450000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 98.2,
+    "YouTubeUsersJuly2023": 1.46,
+    "YouTubeUsersPenetrationJuly2023": 109.5
+  },
+  {
+    "flagCode": "EE",
+    "country": "Estonia",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 1040000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 84,
+    "YouTubeUsersJuly2023": 1.07,
+    "YouTubeUsersPenetrationJuly2023": 87.3
+  },
+  {
+    "flagCode": "IS",
+    "country": "Iceland",
+    "YouTubeUsers_TotalUsers_Num_2024Feb": 276000,
+    "YouTubeUsers_Penetration_Pct_2024Feb": 74,
+    "YouTubeUsersJuly2023": 0.29,
+    "YouTubeUsersPenetrationJuly2023": 88.4
+  }
+]

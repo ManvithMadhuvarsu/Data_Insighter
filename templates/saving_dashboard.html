@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Insighter Dashboard</title>
+    
+    <!-- Required Dependencies -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+
+        .dashboard-container {
+            padding: 20px;
+            overflow-x: auto;
+            overflow-y: visible;
+            width: 100%;
+            position: relative;
+        }
+
+        .dashboard-area {
+            position: relative;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin: 0 auto;
+            box-sizing: border-box;
+        }
+
+        .viz-block {
+            position: absolute;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .viz-header {
+            padding: 10px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+
+        .viz-content {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .plot-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        .text-box {
+            position: absolute;
+            background: transparent;
+            border: none;
+            padding: 10px;
+            overflow: visible;
+        }
+
+        .text-box-content {
+            margin: 0;
+            padding: 0;
+            outline: none;
+            border: none;
+            background: transparent;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        /* Add scrollbar styling */
+        .dashboard-container::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .dashboard-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .dashboard-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .dashboard-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div id="dashboardArea" class="dashboard-area">
+            <!-- Visualization blocks will be added here -->
+        </div>
+    </div>
+
+    <script>
+        // Load the dashboard data
+        const dashboardData = DASHBOARD_DATA_PLACEHOLDER;
+
+        // Set dashboard dimensions and styles
+        function setDashboardDimensions() {
+            const dashboardArea = document.getElementById('dashboardArea');
+            const dimensions = dashboardData.dimensions;
+            const layout = dashboardData.layout;
+            
+            // Set width to 100% of screen width
+            dashboardArea.style.width = '100%';
+            dashboardArea.style.minWidth = dimensions.minWidth;
+            dashboardArea.style.minHeight = dimensions.minHeight;
+            dashboardArea.style.height = dimensions.height + 'px';
+            
+            // Apply saved layout styles
+            if (layout) {
+                dashboardArea.style.padding = layout.padding;
+                dashboardArea.style.backgroundColor = layout.backgroundColor;
+            }
+        }
+
+        // Calculate scaled dimensions based on current dashboard width
+        function getScaledDimensions(originalValue, originalWidth) {
+            const currentWidth = document.getElementById('dashboardArea').offsetWidth;
+            return (originalValue / originalWidth) * currentWidth;
+        }
+
+        // Create visualization blocks with responsive positioning
+        function createVizBlock(vizData, id) {
+            const block = document.createElement('div');
+            block.className = 'viz-block';
+            
+            // Calculate scaled dimensions
+            const scaledWidth = getScaledDimensions(vizData.size.width, dashboardData.dimensions.originalWidth);
+            const scaledX = getScaledDimensions(vizData.position.x, dashboardData.dimensions.originalWidth);
+            
+            // Set position and size using calculated values
+            block.style.width = scaledWidth + 'px';
+            block.style.height = vizData.size.height + 'px';
+            block.style.left = scaledX + 'px';
+            block.style.top = vizData.position.y + 'px';
+            
+            // Apply saved styles
+            if (vizData.style) {
+                block.style.zIndex = vizData.style.zIndex;
+                block.style.backgroundColor = vizData.style.backgroundColor;
+                block.style.borderRadius = vizData.style.borderRadius;
+                block.style.boxShadow = vizData.style.boxShadow;
+            }
+
+            block.innerHTML = `
+                <div class="viz-header">
+                    <span>${vizData.type} Chart</span>
+                </div>
+                <div class="viz-content">
+                    <div class="plot-container"></div>
+                </div>
+            `;
+
+            document.getElementById('dashboardArea').appendChild(block);
+
+            // Create the visualization with scaled dimensions
+            const plotContainer = block.querySelector('.plot-container');
+            if (vizData.plotData) {
+                const layout = {
+                    ...vizData.plotData.layout,
+                    width: scaledWidth,
+                    height: vizData.size.height - 40 // Account for header
+                };
+                Plotly.newPlot(plotContainer, vizData.plotData.data, layout);
+            }
+        }
+
+        // Create text boxes with responsive positioning
+        function createTextBox(textBoxData) {
+            const textBox = document.createElement('div');
+            textBox.className = 'text-box';
+            
+            // Calculate scaled dimensions
+            const scaledWidth = getScaledDimensions(textBoxData.size.width, dashboardData.dimensions.originalWidth);
+            const scaledX = getScaledDimensions(textBoxData.position.x, dashboardData.dimensions.originalWidth);
+            
+            // Set position and size using calculated values
+            textBox.style.width = scaledWidth + 'px';
+            textBox.style.height = textBoxData.size.height + 'px';
+            textBox.style.left = scaledX + 'px';
+            textBox.style.top = textBoxData.position.y + 'px';
+            
+            const content = document.createElement('div');
+            content.className = 'text-box-content';
+            content.innerHTML = textBoxData.content;
+            
+            // Apply all saved styles
+            if (textBoxData.style) {
+                Object.assign(content.style, textBoxData.style);
+                textBox.style.zIndex = textBoxData.style.zIndex;
+            }
+            
+            textBox.appendChild(content);
+            document.getElementById('dashboardArea').appendChild(textBox);
+        }
+
+        // Initialize the dashboard
+        function initializeDashboard() {
+            setDashboardDimensions();
+            
+            // Create all visualizations
+            if (dashboardData.visualizations) {
+                Object.entries(dashboardData.visualizations).forEach(([id, viz]) => {
+                    createVizBlock(viz, id);
+                });
+            }
+            
+            // Create all text boxes
+            if (dashboardData.textBoxes) {
+                dashboardData.textBoxes.forEach(textBox => {
+                    createTextBox(textBox);
+                });
+            }
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            const dashboardArea = document.getElementById('dashboardArea');
+            
+            // Remove existing elements
+            while (dashboardArea.firstChild) {
+                dashboardArea.removeChild(dashboardArea.firstChild);
+            }
+            
+            // Reinitialize dashboard with new dimensions
+            initializeDashboard();
+        });
+
+        // Initialize when the page loads
+        document.addEventListener('DOMContentLoaded', initializeDashboard);
+    </script>
+</body>
+</html> 

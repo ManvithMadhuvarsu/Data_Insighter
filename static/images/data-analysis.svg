@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+    <style>
+        .primary { fill: #2563eb; }
+        .secondary { fill: #64748b; }
+        .accent { fill: #f59e0b; }
+    </style>
+    <rect width="800" height="600" fill="#f8fafc"/>
+    <circle cx="400" cy="300" r="150" class="primary" opacity="0.1"/>
+    <path d="M200,400 L600,200" stroke="#2563eb" stroke-width="4" fill="none"/>
+    <circle cx="300" cy="350" r="50" class="accent" opacity="0.2"/>
+    <rect x="450" y="250" width="100" height="200" class="secondary" opacity="0.1"/>
+    <path d="M250,200 L550,400" stroke="#64748b" stroke-width="4" fill="none"/>
+</svg> 

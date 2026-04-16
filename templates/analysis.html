@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+
+{% block title %}Analysis - Data Insighter{% endblock %}
+
+{% block head %}
+{{ super() }}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="analysis-container">
+    <!-- Control Panel -->
+    <div class="control-panel">
+        <h3>Visualization Controls</h3>
+        
+        <!-- Column Selection -->
+        <div class="section">
+            <h4>Select Columns</h4>
+            <div class="column-list">
+                {% for column in columns %}
+                <div class="column-item">
+                    <label>
+                        <input type="checkbox" name="column" value="{{ column }}">
+                        {{ column }}
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Chart Type Selection -->
+        <div class="section">
+            <h4>Select Chart Type</h4>
+            <div class="chart-types">
+                <label>
+                    <input type="radio" name="chartType" value="bar">
+                    Bar Chart
+                </label>
+                <label>
+                    <input type="radio" name="chartType" value="line">
+                    Line Chart
+                </label>
+                <label>
+                    <input type="radio" name="chartType" value="scatter">
+                    Scatter Plot
+                </label>
+                <label>
+                    <input type="radio" name="chartType" value="pie">
+                    Pie Chart
+                </label>
+                <label>
+                    <input type="radio" name="chartType" value="histogram">
+                    Histogram
+                </label>
+                <label>
+                    <input type="radio" name="chartType" value="box">
+                    Box Plot
+                </label>
+            </div>
+        </div>
+
+        <!-- Sample Size -->
+        <div class="section">
+            <h4>Sample Size</h4>
+            <input type="range" id="percentageSlider" min="1" max="100" value="100">
+            <input type="number" id="dataSamplePercentage" min="1" max="100" value="100">
+            <span>%</span>
+        </div>
+
+        <!-- Generate Button -->
+        <button id="generateChart" class="btn btn-primary">Generate Visualization</button>
+        <button id="addToDashboardBtn" class="btn btn-primary" style="display:none; margin-top:10px;">Add to Dashboard</button>
+    </div>
+
+    <!-- Visualization Area -->
+    <div class="visualization-panel">
+        <div id="chartArea" class="chart-area">
+            <!-- Loading Spinner -->
+            <div id="loadingSpinner" class="loading-spinner" style="display: none;">
+                <div class="spinner"></div>
+                <p>Generating visualization...</p>
+            </div>
+            <div id="plotContainer"></div>
+        </div>
+    </div>
+</div>
+
+<style>
+.analysis-container {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 20px;
+    padding: 20px;
+}
+
+.control-panel {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.section {
+    margin-bottom: 20px;
+}
+
+.column-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.chart-types {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.visualization-panel {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.loading-spinner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Add the new styles you provided */
+.notification {
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    padding: 8px 15px;
+    border-radius: 3px;
+    color: white;
+    z-index: 1000;
+    font-size: 14px;
+    line-height: 1.2;
+    max-width: 150px;
+    animation: slideIn 0.5s ease-out;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.notification.error {
+    background-color: #ff4444;
+}
+
+.notification.success {
+    background-color: #4CAF50;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+#plotContainer {
+    width: 100%;
+    height: 100%;
+    min-height: 500px;
+}
+
+.chart-area {
+    width: 100%;
+    height: 100%;
+    min-height: 500px;
+    position: relative;
+}
+</style>
+
+<script>
+    // Keep track of the current plot
+    let currentPlot = null;
+    
+    // Function to completely remove the previous visualization and prepare for new one
+    function clearAndPrepareVisualization() {
+        // Get the chart area and plot container
+        const chartArea = document.getElementById('chartArea');
+        const plotContainer = document.getElementById('plotContainer');
+    
+        // If there's an existing plot, properly destroy it
+        if (currentPlot && plotContainer) {
+            Plotly.purge(plotContainer);
+            currentPlot = null;
+        }
+    
+        // Clear and reset the chart area
+        chartArea.innerHTML = `
+            <div id="loadingSpinner" class="loading-spinner" style="display: none;">
+                <div class="spinner"></div>
+                <p>Generating visualization...</p>
+            </div>
+            <div id="plotContainer" style="width: 100%; height: 100%;"></div>
+        `;
+    
+        return document.getElementById('plotContainer');
+    }
+    
+    // Main function to generate visualization
+    async function generateVisualization() {
+        // Get current selections
+        const selectedColumns = [...document.querySelectorAll('input[name="column"]:checked')]
+            .map(cb => cb.value);
+        
+        const selectedType = document.querySelector('input[name="chartType"]:checked')?.value;
+        const samplePercentage = parseInt(document.getElementById('dataSamplePercentage').value);
+    
+        // Validate selections
+        if (!selectedColumns.length) {
+            showError('Please select at least one column');
+            return;
+        }
+    
+        if (!selectedType) {
+            showError('Please select a chart type');
+            return;
+        }
+    
+        // Clear previous visualization and get new container
+        const plotContainer = clearAndPrepareVisualization();
+        // Hide Add to Dashboard button until next successful viz
+        document.getElementById('addToDashboardBtn').style.display = 'none';
+    
+        // Show loading spinner
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        loadingSpinner.style.display = 'block';
+        
+        try {
+            // Make API call to generate visualization
+            // FIX #5: No filepath sent — server reads it from session
+            const response = await fetch('/generate_visualization', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    columns: selectedColumns,
+                    type: selectedType,
+                    sample_percentage: samplePercentage
+                })
+            });
+    
+            const data = await response.json();
+            
+            if (data.success) {
+                // Create new visualization with the response data
+                await createVisualization(data.visualization, plotContainer);
+            } else {
+                showError(data.error || 'Failed to generate visualization');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showError('Error generating visualization: ' + error.message);
+        } finally {
+            // Hide loading spinner
+            loadingSpinner.style.display = 'none';
+        }
+    }
+    
+    // Function to create the visualization
+    async function createVisualization(vizData, container) {
+        try {
+            // Calculate container dimensions
+            const containerWidth = 800;
+            const containerHeight = 800;
+    
+            // Prepare layout with responsive dimensions
+            const layout = {
+                ...vizData.layout,
+                width: containerWidth,
+                height: containerHeight,
+                autosize: true,
+                margin: { l: 50, r: 30, t: 50, b: 50 },
+                font: { size: 12 },
+                showlegend: true
+            };
+    
+            // Create new plot
+            await Plotly.newPlot(container, vizData.data, layout, {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false,
+                modeBarButtonsToRemove: ['sendDataToCloud'],
+                toImageButtonOptions: {
+                    format: 'png',
+                    filename: 'visualization',
+                    height: containerHeight,
+                    width: containerWidth,
+                    scale: 2
+                }
+            });
+
+            // Show and set up the Add to Dashboard button
+            const addToDashboardBtn = document.getElementById('addToDashboardBtn');
+            addToDashboardBtn.style.display = 'block';
+            addToDashboardBtn.onclick = async () => {
+                try {
+                    // Get the current visualization parameters
+                    const selectedColumns = [...document.querySelectorAll('input[name="column"]:checked')]
+                        .map(cb => cb.value);
+                    const selectedType = document.querySelector('input[name="chartType"]:checked')?.value;
+                    const samplePercentage = parseInt(document.getElementById('dataSamplePercentage').value);
+
+                    if (!selectedColumns.length || !selectedType) {
+                        showError('Please select columns and chart type');
+                        return;
+                    }
+
+                    // Get the current visualization data from Plotly
+                    const plotData = await Plotly.toImage(container, {
+                        format: 'png',
+                        width: container.offsetWidth,
+                        height: container.offsetHeight
+                    });
+
+                    // Create visualization configuration
+                    // FIX #5: No filepath stored on client
+                    const currentViz = {
+                        id: Date.now(),
+                        type: selectedType,
+                        columns: selectedColumns,
+                        samplePercentage: samplePercentage,
+                        thumbnail: plotData,
+                        position: { x: 0, y: 0 },
+                        size: { width: 400, height: 300 }
+                    };
+
+                    // Save to localStorage
+                    const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
+                    dashboardViz.push(currentViz);
+                    localStorage.setItem('dashboardViz', JSON.stringify(dashboardViz));
+                    
+                    showSuccess('Visualization added to dashboard!');
+                    
+                    // Redirect to dashboard page
+                    setTimeout(() => {
+                        window.location.href = '/dashboard';
+                    }, 1500);
+                } catch (error) {
+                    console.error('Error adding to dashboard:', error);
+                    showError('Failed to add visualization to dashboard: ' + error.message);
+                }
+            };
+    
+            // Store reference to new plot
+            currentPlot = container;
+    
+            // Handle window resizing
+            const handleResize = debounce(() => {
+                if (currentPlot) {
+                    const newWidth = container.parentElement.offsetWidth;
+                    const newHeight = Math.max(500, window.innerHeight * 0.7);
+                    Plotly.relayout(currentPlot, {
+                        width: newWidth,
+                        height: newHeight
+                    });
+                }
+            }, 250);
+    
+            // Remove any existing resize listener and add new one
+            window.removeEventListener('resize', handleResize);
+            window.addEventListener('resize', handleResize);
+    
+        } catch (error) {
+            console.error('Error creating visualization:', error);
+            showError('Error creating visualization: ' + error.message);
+        }
+    }
+    
+    // Utility function to debounce resize events
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+    
+    // Function to show notifications (both error and success)
+    function showNotification(message, type = 'error', duration = 3000) {
+        // Remove any existing notifications
+        const existingNotifications = document.querySelectorAll('.notification');
+        existingNotifications.forEach(notification => notification.remove());
+
+        // Create new notification
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        
+        // Remove after specified duration
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, duration);
+    }
+
+    // Separate functions for error and success notifications
+    function showError(message) {
+        showNotification(message, 'error', 5000); // Errors show for 5 seconds
+    }
+
+    function showSuccess(message) {
+        showNotification(message, 'success', 2000); // Success messages show for 2 seconds
+    }
+    
+    // Initialize the page
+    function initializePage() {
+        // Set up generate button with fresh event listener
+        const generateButton = document.getElementById('generateChart');
+        if (generateButton) {
+            // Remove any existing listeners by cloning
+            const newButton = generateButton.cloneNode(true);
+            generateButton.parentNode.replaceChild(newButton, generateButton);
+            // Add new click listener
+            newButton.addEventListener('click', generateVisualization);
+        }
+    
+        // Set up sample size controls
+        const percentageInput = document.getElementById('dataSamplePercentage');
+        const percentageSlider = document.getElementById('percentageSlider');
+    
+        if (percentageInput && percentageSlider) {
+            // Sync input and slider
+            percentageInput.addEventListener('input', function() {
+                let value = parseInt(this.value);
+                if (value < 1) value = 1;
+                if (value > 100) value = 100;
+                this.value = value;
+                percentageSlider.value = value;
+            });
+    
+            percentageSlider.addEventListener('input', function() {
+                percentageInput.value = this.value;
+            });
+        }
+    }
+    
+    // Initialize when DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        initializePage();
+    });
+    </script>
+{% endblock %} 

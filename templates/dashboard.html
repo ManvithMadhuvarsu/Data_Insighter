@@ -1,0 +1,942 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Data Insighter{% endblock %}
+
+{% block head %}
+{{ super() }}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/interact.js/1.10.11/interact.min.js"></script>
+<script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h2>My Dashboard</h2>
+        <div class="header-buttons">
+            <button id="addText" class="btn btn-primary">Add Text</button>
+            <button id="saveDashboard" class="btn btn-success">Save Dashboard</button>
+            <button id="clearDashboard" class="btn btn-danger">Clear Dashboard</button>
+        </div>
+    </div>
+
+    <div id="dashboardArea" class="dashboard-area">
+        <!-- Visualization blocks will be added here -->
+        <div id="dashboardResizeHandle" class="dashboard-resize-handle"></div>
+    </div>
+</div>
+
+<style>
+.dashboard-container {
+    padding: 20px;
+    overflow-x: auto;
+    overflow-y: visible;
+    width: 100%;
+    position: relative;
+}
+
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: white;
+    padding: 10px 0;
+}
+
+.dashboard-area {
+    min-height: 600px;
+    min-width: 100%;
+    width: fit-content;
+    border: 2px dashed #ccc;
+    padding: 20px;
+    position: relative;
+    resize: none; /* We'll use interact.js for resizing */
+    margin: 0 auto;
+}
+
+.viz-block {
+    position: absolute;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.viz-header {
+    background: #f8f9fa;
+    padding: 8px;
+    border-bottom: 1px solid #ddd;
+    cursor: move;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.viz-content {
+    padding: 10px;
+    height: calc(100% - 40px);
+}
+
+.viz-remove {
+    color: #dc3545;
+    cursor: pointer;
+    padding: 4px;
+}
+
+.resize-handle {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: #007bff;
+    border-radius: 50%;
+}
+
+.resize-handle.nw { top: -5px; left: -5px; cursor: nw-resize; }
+.resize-handle.ne { top: -5px; right: -5px; cursor: ne-resize; }
+.resize-handle.sw { bottom: -5px; left: -5px; cursor: sw-resize; }
+.resize-handle.se { bottom: -5px; right: -5px; cursor: se-resize; }
+
+.dashboard-resize-handle {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    right: 0;
+    bottom: 0;
+    background: #007bff;
+    border-radius: 4px 0 0 0;
+    cursor: se-resize;
+    z-index: 10;
+}
+
+/* Add scrollbar styling */
+.dashboard-container::-webkit-scrollbar {
+    height: 8px;
+}
+
+.dashboard-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.dashboard-container::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+.dashboard-container::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+.text-box {
+    position: absolute;
+    background: transparent;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 10px;
+    min-width: 100px;
+    min-height: 50px;
+    resize: both;
+    overflow: auto;
+}
+
+.text-box-header {
+    background: #f8f9fa;
+    padding: 8px;
+    border-bottom: 1px solid #ddd;
+    cursor: move;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.text-box-content {
+    padding: 10px;
+    outline: none;
+    width: 100%;
+    height: 100%;
+    resize: none;
+    border: none;
+}
+
+.text-box-controls {
+    display: flex;
+    gap: 5px;
+}
+
+.text-box-controls select, .text-box-controls input {
+    padding: 2px 5px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+}
+
+.header-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+/* Modal styles */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    max-width: 500px;
+    width: 90%;
+}
+
+.save-options {
+    display: flex;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.save-options button {
+    flex: 1;
+}
+
+#closeModal {
+    width: 100%;
+    margin-top: 1rem;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dashboardArea = document.getElementById('dashboardArea');
+    const clearDashboardBtn = document.getElementById('clearDashboard');
+    
+    // Load visualizations from localStorage
+    function loadDashboard() {
+    const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
+        dashboardViz.forEach(viz => createVizBlock(viz));
+    }
+
+    // Create a visualization block
+    function createVizBlock(viz) {
+        const block = document.createElement('div');
+        block.className = 'viz-block';
+        block.id = `viz-${viz.id}`;
+        block.style.width = `${viz.size.width}px`;
+        block.style.height = `${viz.size.height}px`;
+        block.style.left = `${viz.position.x}px`;
+        block.style.top = `${viz.position.y}px`;
+
+        block.innerHTML = `
+                <div class="viz-header">
+                <span>${viz.type} Chart</span>
+                <span class="viz-remove">&times;</span>
+                </div>
+            <div class="viz-content">
+                <div class="plot-container"></div>
+            </div>
+            <div class="resize-handle nw"></div>
+            <div class="resize-handle ne"></div>
+            <div class="resize-handle sw"></div>
+            <div class="resize-handle se"></div>
+        `;
+
+        dashboardArea.appendChild(block);
+        makeResizable(block);
+        makeDraggable(block);
+        
+        // Generate the visualization
+        generateVisualization(block, viz);
+        
+        // Add remove functionality
+        block.querySelector('.viz-remove').addEventListener('click', () => {
+            removeVizBlock(viz.id);
+        });
+    }
+
+    // Generate visualization for a block
+    async function generateVisualization(block, viz) {
+        try {
+            const response = await fetch('/generate_visualization', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    columns: viz.columns,
+                    type: viz.type,
+                    sample_percentage: viz.samplePercentage
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                const container = block.querySelector('.plot-container');
+                await Plotly.newPlot(container, data.visualization.data, {
+                    ...data.visualization.layout,
+                    width: container.offsetWidth,
+                    height: container.offsetHeight
+                });
+            }
+        } catch (error) {
+            console.error('Error generating visualization:', error);
+        }
+    }
+
+    // Make a block resizable
+    function makeResizable(element) {
+        interact(element)
+            .resizable({
+                edges: {
+                    top: '.resize-handle.nw, .resize-handle.ne',
+                    left: '.resize-handle.nw, .resize-handle.sw',
+                    bottom: '.resize-handle.sw, .resize-handle.se',
+                    right: '.resize-handle.ne, .resize-handle.se'
+                },
+                modifiers: [
+                    interact.modifiers.restrictSize({
+                        min: { width: 200, height: 200 },
+                        max: { width: 800, height: 600 }
+                    }),
+                    interact.modifiers.restrictEdges({
+                        outer: '#dashboardArea',
+                        endOnly: true
+                    })
+                ],
+                listeners: {
+                    move: function(event) {
+                        const target = event.target;
+                        const dashboardArea = document.getElementById('dashboardArea');
+                        const dashboardRect = dashboardArea.getBoundingClientRect();
+                        
+                        let { x, y } = event.target.getBoundingClientRect();
+                        let newWidth = event.rect.width;
+                        let newHeight = event.rect.height;
+                        
+                        // Ensure the visualization stays within dashboard bounds
+                        if (x + newWidth > dashboardRect.right) {
+                            newWidth = dashboardRect.right - x;
+                        }
+                        if (y + newHeight > dashboardRect.bottom) {
+                            newHeight = dashboardRect.bottom - y;
+                        }
+                        
+                        target.style.width = newWidth + 'px';
+                        target.style.height = newHeight + 'px';
+                        
+                        // Update the plot size
+                        const plotContainer = target.querySelector('.plot-container');
+                        if (plotContainer) {
+                            Plotly.relayout(plotContainer, {
+                                width: newWidth,
+                                height: newHeight - 40 // Account for header height
+                            });
+                        }
+                        
+                        // Update stored size
+                        const vizId = target.id.split('-')[1];
+                        updateVizSize(vizId, newWidth, newHeight);
+                    }
+                }
+            });
+    }
+
+    // Make a block draggable
+    function makeDraggable(element) {
+        interact(element)
+            .draggable({
+                allowFrom: '.viz-header',
+                modifiers: [
+                    interact.modifiers.restrictRect({
+                        restriction: '#dashboardArea',
+                        endOnly: true
+                    })
+                ],
+                listeners: {
+                    move: function(event) {
+                        const target = event.target;
+                        const x = (parseFloat(target.style.left) || 0) + event.dx;
+                        const y = (parseFloat(target.style.top) || 0) + event.dy;
+                        
+                        // Get dashboard area boundaries
+                        const dashboardArea = document.getElementById('dashboardArea');
+                        const dashboardRect = dashboardArea.getBoundingClientRect();
+                        const targetRect = target.getBoundingClientRect();
+                        
+                        // Calculate bounds
+                        const maxX = dashboardRect.width - targetRect.width;
+                        const maxY = dashboardRect.height - targetRect.height;
+                        
+                        // Constrain position within dashboard area
+                        const boundedX = Math.min(Math.max(0, x), maxX);
+                        const boundedY = Math.min(Math.max(0, y), maxY);
+                        
+                        target.style.left = boundedX + 'px';
+                        target.style.top = boundedY + 'px';
+                        
+                        // Update stored position
+                        const vizId = target.id.split('-')[1];
+                        updateVizPosition(vizId, boundedX, boundedY);
+                    }
+                }
+            });
+    }
+
+    // Update visualization size in localStorage
+    function updateVizSize(id, width, height) {
+        const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
+        const viz = dashboardViz.find(v => v.id === parseInt(id));
+        if (viz) {
+            viz.size = { width, height };
+            localStorage.setItem('dashboardViz', JSON.stringify(dashboardViz));
+        }
+    }
+
+    // Update visualization position in localStorage
+    function updateVizPosition(id, x, y) {
+        const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
+        const viz = dashboardViz.find(v => v.id === parseInt(id));
+        if (viz) {
+            viz.position = { x, y };
+            localStorage.setItem('dashboardViz', JSON.stringify(dashboardViz));
+        }
+    }
+
+    // Remove a visualization block
+    function removeVizBlock(id) {
+        const block = document.getElementById(`viz-${id}`);
+        if (block) {
+            block.remove();
+        const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
+        const updatedViz = dashboardViz.filter(v => v.id !== id);
+        localStorage.setItem('dashboardViz', JSON.stringify(updatedViz));
+    }
+}
+
+    // Clear dashboard
+    clearDashboardBtn.addEventListener('click', () => {
+    if (confirm('Are you sure you want to clear the dashboard?')) {
+        localStorage.removeItem('dashboardViz');
+            dashboardArea.innerHTML = '';
+    }
+    });
+
+    // Initialize dashboard
+    loadDashboard();
+
+    // Make dashboard area resizable
+    interact('#dashboardArea').resizable({
+        edges: { bottom: true, right: true },
+        listeners: {
+            move (event) {
+                let { x, y } = event.target.dataset
+                x = (parseFloat(x) || 0)
+                y = (parseFloat(y) || 0)
+                
+                const maxWidth = Math.max(window.innerWidth - 40, 800); // 40px for container padding
+                const newWidth = Math.min(event.rect.width, maxWidth);
+                
+                // Update the element's style
+                event.target.style.width = newWidth + 'px';
+                event.target.style.height = event.rect.height + 'px';
+                
+                // Center the dashboard area if it's smaller than the viewport
+                if (newWidth < window.innerWidth - 40) {
+                    event.target.style.marginLeft = 'auto';
+                    event.target.style.marginRight = 'auto';
+                } else {
+                    event.target.style.marginLeft = '0';
+                    event.target.style.marginRight = '0';
+                }
+            }
+        },
+        modifiers: [
+            interact.modifiers.restrictSize({
+                min: { width: 400, height: 400 },
+                max: { width: 3000, height: 20000 } // Very large max height
+            })
+        ]
+    });
+
+    // Make the resize handle trigger the resize
+    interact('#dashboardResizeHandle').draggable({
+        listeners: {
+            move (event) {
+                const dashboardArea = document.getElementById('dashboardArea');
+                const style = window.getComputedStyle(dashboardArea);
+                const width = parseFloat(style.width);
+                const height = parseFloat(style.height);
+                
+                const maxWidth = Math.max(window.innerWidth - 40, 800);
+                const newWidth = Math.min(width + event.dx, maxWidth);
+                
+                dashboardArea.style.width = newWidth + 'px';
+                dashboardArea.style.height = (height + event.dy) + 'px';
+                
+                // Center the dashboard area if it's smaller than the viewport
+                if (newWidth < window.innerWidth - 40) {
+                    dashboardArea.style.marginLeft = 'auto';
+                    dashboardArea.style.marginRight = 'auto';
+                } else {
+                    dashboardArea.style.marginLeft = '0';
+                    dashboardArea.style.marginRight = '0';
+                }
+            }
+        }
+    });
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+        const dashboardArea = document.getElementById('dashboardArea');
+        const currentWidth = parseFloat(window.getComputedStyle(dashboardArea).width);
+        const maxWidth = window.innerWidth - 40;
+        
+        if (currentWidth > maxWidth) {
+            dashboardArea.style.width = maxWidth + 'px';
+            dashboardArea.style.marginLeft = '0';
+            dashboardArea.style.marginRight = '0';
+        } else {
+            dashboardArea.style.marginLeft = 'auto';
+            dashboardArea.style.marginRight = 'auto';
+        }
+    });
+
+    // Text box functionality
+    let textBoxCounter = 0;
+
+    document.getElementById('addText').addEventListener('click', function() {
+        const dashboardArea = document.getElementById('dashboardArea');
+        const textBox = document.createElement('div');
+        textBox.className = 'text-box';
+        textBox.id = `text-box-${textBoxCounter++}`;
+        textBox.style.left = '20px';
+        textBox.style.top = '20px';
+        textBox.style.position = 'absolute';
+        textBox.style.zIndex = 10;
+        
+        const header = document.createElement('div');
+        header.className = 'text-box-header';
+        
+        const controls = document.createElement('div');
+        controls.className = 'text-box-controls';
+        
+        // Font family selector
+        const fontSelect = document.createElement('select');
+        fontSelect.innerHTML = `
+            <option value="Arial">Arial</option>
+            <option value="Times New Roman">Times New Roman</option>
+            <option value="Courier New">Courier New</option>
+            <option value="Georgia">Georgia</option>
+        `;
+        
+        // Font size selector
+        const sizeSelect = document.createElement('select');
+        sizeSelect.innerHTML = `
+            <option value="12px">12px</option>
+            <option value="14px">14px</option>
+            <option value="16px">16px</option>
+            <option value="18px">18px</option>
+            <option value="20px">20px</option>
+            <option value="24px">24px</option>
+        `;
+        
+        // Color picker
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.value = '#000000';
+        
+        // Remove button
+        const removeButton = document.createElement('button');
+        removeButton.innerHTML = '×';
+        removeButton.style.background = 'none';
+        removeButton.style.border = 'none';
+        removeButton.style.cursor = 'pointer';
+        removeButton.style.fontSize = '20px';
+        removeButton.style.color = '#dc3545';
+        
+        const content = document.createElement('div');
+        content.className = 'text-box-content';
+        content.contentEditable = true;
+        content.innerHTML = 'Double click to edit text';
+        content.style.fontFamily = fontSelect.value;
+        content.style.fontSize = sizeSelect.value;
+        content.style.color = colorInput.value;
+        
+        controls.appendChild(fontSelect);
+        controls.appendChild(sizeSelect);
+        controls.appendChild(colorInput);
+        header.appendChild(controls);
+        header.appendChild(removeButton);
+        textBox.appendChild(header);
+        textBox.appendChild(content);
+        
+        // Make text box draggable and resizable within dashboard area
+        interact(textBox)
+            .draggable({
+                allowFrom: '.text-box-header',
+                inertia: true,
+                modifiers: [
+                    interact.modifiers.restrictRect({
+                        restriction: dashboardArea,
+                        endOnly: true
+                    })
+                ],
+                autoScroll: true,
+                listeners: {
+                    move: dragMoveListener
+                }
+            })
+            .resizable({
+                edges: { left: true, right: true, bottom: true, top: true },
+                modifiers: [
+                    interact.modifiers.restrictEdges({
+                        outer: dashboardArea,
+                        endOnly: true
+                    })
+                ],
+                listeners: {
+                    move: function (event) {
+                        let { x, y } = event.target.dataset;
+                        x = (parseFloat(x) || 0) + event.deltaRect.left;
+                        y = (parseFloat(y) || 0) + event.deltaRect.top;
+                        Object.assign(event.target.style, {
+                            width: `${event.rect.width}px`,
+                            height: `${event.rect.height}px`,
+                            transform: `translate(${x}px, ${y}px)`
+                        });
+                        Object.assign(event.target.dataset, { x, y });
+                    }
+                }
+            });
+        
+        // Event listeners for text controls
+        fontSelect.addEventListener('change', function() {
+            content.style.fontFamily = this.value;
+        });
+        
+        sizeSelect.addEventListener('change', function() {
+            content.style.fontSize = this.value;
+        });
+        
+        colorInput.addEventListener('input', function() {
+            content.style.color = this.value;
+        });
+        
+        removeButton.addEventListener('click', function() {
+            textBox.remove();
+        });
+        
+        // Hide controls and border on Enter, show on double click
+        content.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                content.contentEditable = false;
+                controls.style.display = 'none';
+                header.style.borderBottom = 'none';
+                textBox.style.border = 'none';
+                textBox.style.boxShadow = 'none';
+                textBox.style.resize = 'none';
+                textBox.style.pointerEvents = 'auto';
+                // Hide remove button
+                removeButton.style.display = 'none';
+                // Remove scroll and line
+                textBox.style.overflow = 'visible';
+                textBox.style.height = 'auto';
+                content.style.overflow = 'visible';
+                content.style.height = 'auto';
+                content.style.outline = 'none';
+                content.style.border = 'none';
+                content.style.padding = '0';
+                // Only disable resizing, keep dragging enabled
+                interact(textBox).unset();
+                interact(textBox)
+                    .draggable({
+                        allowFrom: '.text-box-header, .text-box-content',
+                        inertia: true,
+                        modifiers: [
+                            interact.modifiers.restrictRect({
+                                restriction: dashboardArea,
+                                endOnly: true
+                            })
+                        ],
+                        autoScroll: true,
+                        listeners: {
+                            move: dragMoveListener
+                        }
+                    });
+            }
+        });
+        // Double click to edit again
+        content.addEventListener('dblclick', function() {
+            content.contentEditable = true;
+            controls.style.display = 'flex';
+            header.style.borderBottom = '1px solid #ddd';
+            textBox.style.border = '1px solid #ddd';
+            textBox.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+            textBox.style.resize = 'both';
+            // Show remove button again
+            removeButton.style.display = '';
+            // Restore scroll and line
+            textBox.style.overflow = 'auto';
+            content.style.overflow = 'auto';
+            content.style.height = '';
+            content.style.outline = '';
+            content.style.border = 'none';
+            content.style.padding = '10px';
+            // Re-enable draggable and resizable
+            interact(textBox)
+                .draggable({
+                    allowFrom: '.text-box-header',
+                    inertia: true,
+                    modifiers: [
+                        interact.modifiers.restrictRect({
+                            restriction: dashboardArea,
+                            endOnly: true
+                        })
+                    ],
+                    autoScroll: true,
+                    listeners: {
+                        move: dragMoveListener
+                    }
+                })
+                .resizable({
+                    edges: { left: true, right: true, bottom: true, top: true },
+                    modifiers: [
+                        interact.modifiers.restrictEdges({
+                            outer: dashboardArea,
+                            endOnly: true
+                        })
+                    ],
+                    listeners: {
+                        move: function (event) {
+                            let { x, y } = event.target.dataset;
+                            x = (parseFloat(x) || 0) + event.deltaRect.left;
+                            y = (parseFloat(y) || 0) + event.deltaRect.top;
+                            Object.assign(event.target.style, {
+                                width: `${event.rect.width}px`,
+                                height: `${event.rect.height}px`,
+                                transform: `translate(${x}px, ${y}px)`
+                            });
+                            Object.assign(event.target.dataset, { x, y });
+                        }
+                    }
+                });
+        });
+        
+        dashboardArea.appendChild(textBox);
+    });
+
+    function dragMoveListener(event) {
+        const target = event.target;
+        const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+        const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+        
+        target.style.transform = `translate(${x}px, ${y}px)`;
+        target.setAttribute('data-x', x);
+        target.setAttribute('data-y', y);
+    }
+
+    // Update the save dashboard function
+    document.getElementById('saveDashboard').addEventListener('click', async function() {
+        const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
+        
+        if (dashboardViz.length === 0) {
+            alert('Please add at least one visualization to the dashboard before saving.');
+            return;
+        }
+
+        // Create a modal for save options
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <h3>Save Dashboard</h3>
+                <p>Choose how you want to save your dashboard:</p>
+                <div class="save-options">
+                    <button id="saveInteractive" class="btn btn-primary">Save as Interactive HTML</button>
+                    <button id="saveImage" class="btn btn-primary">Save as Image</button>
+                </div>
+                <button class="btn btn-secondary" id="closeModal">Cancel</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        // Handle save as interactive HTML
+        document.getElementById('saveInteractive').addEventListener('click', async () => {
+            try {
+                // Collect all dashboard content
+                const dashboardArea = document.getElementById('dashboardArea');
+                const dashboardRect = dashboardArea.getBoundingClientRect();
+                const screenWidth = window.innerWidth;
+                
+                // Calculate scale factor for positioning
+                const scaleFactor = screenWidth / dashboardRect.width;
+                
+                const dashboardData = {
+                    visualizations: {},
+                    textBoxes: [],
+                    dimensions: {
+                        width: '100%', // Set to 100% to match screen width
+                        height: dashboardArea.offsetHeight,
+                        minWidth: '100%',
+                        minHeight: dashboardArea.style.minHeight || '600px',
+                        originalWidth: dashboardRect.width // Store original width for scaling
+                    },
+                    layout: {
+                        padding: window.getComputedStyle(dashboardArea).padding,
+                        backgroundColor: window.getComputedStyle(dashboardArea).backgroundColor
+                    }
+                };
+
+                // Get all visualization blocks with adjusted positioning
+                const vizBlocks = document.querySelectorAll('.viz-block');
+                vizBlocks.forEach((block, index) => {
+                    const plotContainer = block.querySelector('.plot-container');
+                    const blockRect = block.getBoundingClientRect();
+                    
+                    // Calculate position relative to dashboard area and scale
+                    const relativeX = (blockRect.left - dashboardRect.left);
+                    const relativeY = blockRect.top - dashboardRect.top;
+                    const relativeWidth = blockRect.width;
+                    
+                    dashboardData.visualizations[`viz_${index}`] = {
+                        type: block.querySelector('.viz-header span').textContent.replace(' Chart', ''),
+                        position: {
+                            x: relativeX,
+                            y: relativeY,
+                            xPercent: (relativeX / dashboardRect.width) * 100 // Store position as percentage
+                        },
+                        size: {
+                            width: relativeWidth,
+                            height: blockRect.height,
+                            widthPercent: (relativeWidth / dashboardRect.width) * 100 // Store width as percentage
+                        },
+                        plotData: plotContainer.data ? {
+                            data: plotContainer.data,
+                            layout: {
+                                ...plotContainer.layout,
+                                width: relativeWidth,
+                                height: blockRect.height - 40 // Account for header
+                            }
+                        } : null,
+                        style: {
+                            zIndex: window.getComputedStyle(block).zIndex,
+                            backgroundColor: window.getComputedStyle(block).backgroundColor,
+                            borderRadius: window.getComputedStyle(block).borderRadius,
+                            boxShadow: window.getComputedStyle(block).boxShadow
+                    }
+                };
+                });
+
+                // Get all text boxes with adjusted positioning
+                const textBoxes = document.querySelectorAll('.text-box');
+                textBoxes.forEach((textBox) => {
+                    const content = textBox.querySelector('.text-box-content');
+                    const textBoxRect = textBox.getBoundingClientRect();
+                    
+                    // Calculate position relative to dashboard area and scale
+                    const relativeX = (textBoxRect.left - dashboardRect.left);
+                    const relativeY = textBoxRect.top - dashboardRect.top;
+                    const relativeWidth = textBoxRect.width;
+                    
+                    const computedStyle = window.getComputedStyle(content);
+                    const textBoxData = {
+                        position: {
+                            x: relativeX,
+                            y: relativeY,
+                            xPercent: (relativeX / dashboardRect.width) * 100 // Store position as percentage
+                        },
+                        size: {
+                            width: relativeWidth,
+                            height: textBoxRect.height,
+                            widthPercent: (relativeWidth / dashboardRect.width) * 100 // Store width as percentage
+                        },
+                        content: content.innerHTML,
+                        style: {
+                            fontFamily: computedStyle.fontFamily,
+                            fontSize: computedStyle.fontSize,
+                            fontWeight: computedStyle.fontWeight,
+                            fontStyle: computedStyle.fontStyle,
+                            color: computedStyle.color,
+                            backgroundColor: computedStyle.backgroundColor,
+                            textAlign: computedStyle.textAlign,
+                            lineHeight: computedStyle.lineHeight,
+                            padding: computedStyle.padding,
+                            zIndex: window.getComputedStyle(textBox).zIndex
+                        }
+                    };
+                    dashboardData.textBoxes.push(textBoxData);
+                });
+
+                // Send request to save as interactive HTML
+                const response = await fetch('/export_dashboard', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        dashboard_data: dashboardData
+                    })
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                    a.download = 'interactive_dashboard.html';
+                document.body.appendChild(a);
+                a.click();
+                    window.URL.revokeObjectURL(url);
+                    a.remove();
+                modal.remove();
+                } else {
+                    throw new Error('Failed to save dashboard');
+                }
+            } catch (error) {
+                console.error('Error saving dashboard:', error);
+                alert('Failed to save dashboard: ' + error.message);
+            }
+        });
+
+        // Handle save as image
+        document.getElementById('saveImage').addEventListener('click', async () => {
+            try {
+                const dashboardArea = document.getElementById('dashboardArea');
+                const canvas = await html2canvas(dashboardArea);
+                const imageUrl = canvas.toDataURL('image/png');
+                const a = document.createElement('a');
+                a.href = imageUrl;
+                a.download = 'dashboard.png';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                modal.remove();
+            } catch (error) {
+                console.error('Error saving dashboard image:', error);
+                alert('Failed to save dashboard image: ' + error.message);
+            }
+        });
+
+        // Handle modal close
+        document.getElementById('closeModal').addEventListener('click', () => {
+            modal.remove();
+        });
+    });
+});
+</script>
+{% endblock %} 

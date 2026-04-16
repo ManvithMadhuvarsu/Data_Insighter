@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}Data Insighter - Data Visualization Platform{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="hero">
+    <div class="hero-content">
+        <h1>Transform Your Data Into Insights</h1>
+        <p class="hero-subtitle">Powerful data analysis and visualization platform for making informed decisions</p>
+        <div class="hero-buttons">
+            <a href="{{ url_for('upload') }}" class="btn btn-primary">
+                <i class="fas fa-upload"></i> Start Analysis
+            </a>
+            <a href="#features" class="btn btn-secondary">
+                <i class="fas fa-info-circle"></i> Learn More
+            </a>
+        </div>
+    </div>
+    <div class="hero-image">
+        <img src="{{ url_for('static', filename='images/data-analysis.svg') }}" alt="Data Analysis">
+    </div>
+</section>
+
+<!-- Features Section -->
+<section class="key-features">
+    <h2 class="section-title">Key Features</h2>
+    <div class="features-grid">
+        <!-- Feature 1 -->
+        <div class="feature-card">
+            <div class="feature-icon">
+                <i class="fas fa-file-upload"></i>
+            </div>
+            <div class="feature-content">
+                <h3>Easy Data Upload</h3>
+                <p>Upload CSV or JSON files with a simple drag-and-drop interface</p>
+            </div>
+        </div>
+
+        <!-- Feature 2 -->
+        <div class="feature-card">
+            <div class="feature-icon">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <div class="feature-content">
+                <h3>Interactive Visualizations</h3>
+                <p>Create dynamic charts and graphs with real-time updates</p>
+            </div>
+        </div>
+
+        <!-- Feature 3 -->
+        <div class="feature-card">
+            <div class="feature-icon">
+                <i class="fas fa-tachometer-alt"></i>
+            </div>
+            <div class="feature-content">
+                <h3>Custom Dashboards</h3>
+                <p>Build and save personalized dashboards for your data</p>
+            </div>
+        </div>
+
+        <!-- Feature 4 -->
+        <div class="feature-card">
+            <div class="feature-icon">
+                <i class="fas fa-download"></i>
+            </div>
+            <div class="feature-content">
+                <h3>Export Options</h3>
+                <p>Download your visualizations in multiple formats</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Sample Datasets Section -->
+<section class="samples">
+    <h2 class="section-title">Try Sample Datasets</h2>
+    <div class="samples-grid">
+        {% for dataset in sample_datasets %}
+        <div class="sample-card">
+            <div class="sample-icon">
+                <i class="fas fa-table"></i>
+            </div>
+            <h3>{{ dataset.split('.')[0]|replace('_', ' ')|title }}</h3>
+            <p>Explore pre-loaded dataset for quick start</p>
+            <button class="btn btn-outline sample-link" data-filename="{{ dataset }}">
+                Use Dataset
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- How It Works Section -->
+<section class="how-it-works">
+    <h2 class="section-title">How it Works</h2>
+    <div class="steps-grid">
+        <!-- Step 1 -->
+        <div class="step-card">
+            <div class="step-number">1</div>
+            <div class="step-icon">
+                <i class="fas fa-upload"></i>
+            </div>
+            <div class="step-content">
+                <h3>Upload Your Data</h3>
+                <p>Simply drag and drop your CSV or JSON files into our intuitive interface</p>
+            </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="step-card">
+            <div class="step-number">2</div>
+            <div class="step-icon">
+                <i class="fas fa-cogs"></i>
+            </div>
+            <div class="step-content">
+                <h3>Process & Analyze</h3>
+                <p>Our system automatically processes and analyzes your data for insights</p>
+            </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="step-card">
+            <div class="step-number">3</div>
+            <div class="step-icon">
+                <i class="fas fa-chart-bar"></i>
+            </div>
+            <div class="step-content">
+                <h3>Visualize Data</h3>
+                <p>Create interactive charts and graphs to visualize your findings</p>
+            </div>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="step-card">
+            <div class="step-number">4</div>
+            <div class="step-icon">
+                <i class="fas fa-share-alt"></i>
+            </div>
+            <div class="step-content">
+                <h3>Share Results</h3>
+                <p>Export and share your visualizations in multiple formats</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA Section -->
+<section class="cta">
+    <div class="cta-content">
+        <h2>Ready to Start Analyzing?</h2>
+        <p>Transform your data into actionable insights today</p>
+        <a href="{{ url_for('upload') }}" class="btn btn-primary">
+            <i class="fas fa-rocket"></i> Get Started
+        </a>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Show welcome message on every visit to home page
+    document.addEventListener('DOMContentLoaded', function() {
+        showInfo('Welcome to Data Insighter!');
+    });
+
+    document.querySelectorAll('.sample-link').forEach(link => {
+        link.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const filename = e.currentTarget.dataset.filename;
+            try {
+                const response = await fetch(`/sample/${filename}`);
+                const data = await response.json();
+                if (data.success) {
+                    // FIX #5: No filepath in URL — server stores it in session
+                    window.location.href = '/analysis';
+                } else {
+                    showError('Error loading sample dataset');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Error loading sample dataset');
+            }
+        });
+    });
+
+    // Add smooth scrolling for Learn More button
+    document.querySelector('a[href="#features"]').addEventListener('click', (e) => {
+        e.preventDefault();
+        const featuresSection = document.querySelector('.key-features');
+        featuresSection.scrollIntoView({ behavior: 'smooth' });
+    });
+</script>
+{% endblock %} 

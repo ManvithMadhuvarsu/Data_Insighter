@@ -23,6 +23,7 @@ from workspace_store import (
     list_dataset_records,
 )
 from transform_service import apply_transform
+from report_service import build_report_payload
 
 # Load environment variables from .env file
 load_dotenv()
@@ -386,6 +387,61 @@ def analysis_summary():
             'summary': processor.get_analysis_summary(),
             'dataset': dataset_record,
         })
+    except Exception as e:
+        return error_response(str(e), 400)
+
+@app.route('/executive_report')
+@login_required
+def executive_report():
+    filepath = session.get('current_filepath')
+    if not filepath or not os.path.exists(filepath):
+        return error_response('No data file loaded. Please upload a file first.', 400)
+
+    try:
+        processor = DataProcessor(filepath)
+        dataset_record = None
+        if session.get('current_dataset_id'):
+            dataset_record = get_dataset_record(session['user'], session['current_dataset_id'])
+        report = build_report_payload(processor.get_analysis_summary(), dataset_record)
+        return jsonify({'success': True, 'report': report})
+    except Exception as e:
+        return error_response(str(e), 400)
+
+@app.route('/export_report', methods=['POST'])
+@login_required
+def export_report():
+    if not validate_csrf_token():
+        return error_response('Invalid request token', 400)
+
+    filepath = session.get('current_filepath')
+    if not filepath or not os.path.exists(filepath):
+        return error_response('No data file loaded. Please upload a file first.', 400)
+
+    payload = request.get_json(silent=True) or {}
+    export_type = payload.get('type', 'html')
+
+    try:
+        processor = DataProcessor(filepath)
+        dataset_record = None
+        if session.get('current_dataset_id'):
+            dataset_record = get_dataset_record(session['user'], session['current_dataset_id'])
+        report = build_report_payload(processor.get_analysis_summary(), dataset_record)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        dataset_name = report['dataset_name'].replace(' ', '_')
+
+        if export_type == 'markdown':
+            output_file = f'{dataset_name}_report_{timestamp}.md'
+            output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_file)
+            with open(output_path, 'w', encoding='utf-8') as handle:
+                handle.write(report['markdown'])
+            return send_file(output_path, as_attachment=True, download_name=output_file, mimetype='text/markdown')
+
+        output_file = f'{dataset_name}_report_{timestamp}.html'
+        output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_file)
+        with open(output_path, 'w', encoding='utf-8') as handle:
+            handle.write(report['html'])
+        return send_file(output_path, as_attachment=True, download_name=output_file, mimetype='text/html')
     except Exception as e:
         return error_response(str(e), 400)
 

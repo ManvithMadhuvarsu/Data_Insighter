@@ -26,6 +26,7 @@
         </div>
         <div class="header-actions">
             <button id="refreshInsights" class="btn btn-secondary">Refresh Insights</button>
+            <button id="loadExecutiveReport" class="btn btn-secondary">Generate Report</button>
             <a href="{{ url_for('dashboard') }}" class="btn btn-outline">Open Dashboard</a>
         </div>
     </section>
@@ -169,8 +170,13 @@
                         <p class="eyebrow">Executive Summary</p>
                         <h2>Top takeaways</h2>
                     </div>
+                    <div class="recommendation-actions">
+                        <button id="exportHtmlReport" class="btn btn-outline">Export HTML</button>
+                        <button id="exportMarkdownReport" class="btn btn-outline">Export Markdown</button>
+                    </div>
                 </div>
                 <div id="executiveTakeaways" class="stack-list loading-text">Writing a concise summary from the dataset...</div>
+                <div id="reportPreview" class="report-preview loading-text">Report sections will appear here after generation.</div>
             </div>
 
             <div class="panel">
@@ -477,6 +483,23 @@
     font-weight: 600;
 }
 
+.report-preview {
+    margin-top: 14px;
+    border-top: 1px solid #eaecf0;
+    padding-top: 14px;
+    display: grid;
+    gap: 14px;
+}
+
+.report-section h3 {
+    margin-bottom: 8px;
+}
+
+.report-section ul {
+    padding-left: 18px;
+    color: #475467;
+}
+
 .recommendation-actions {
     display: flex;
     gap: 10px;
@@ -657,6 +680,7 @@
 <script>
 let currentPlot = null;
 let currentChartMeta = null;
+let currentReport = null;
 
 function selectedColumns() {
     return [...document.querySelectorAll('input[name="column"]:checked')].map((checkbox) => checkbox.value);
@@ -759,6 +783,18 @@ function renderExecutiveTakeaways(items) {
     `).join('');
 }
 
+function renderReportPreview(report) {
+    currentReport = report;
+    document.getElementById('reportPreview').innerHTML = report.sections.map((section) => `
+        <div class="report-section">
+            <h3>${section.title}</h3>
+            <ul>
+                ${section.bullets.map((bullet) => `<li>${bullet}</li>`).join('')}
+            </ul>
+        </div>
+    `).join('');
+}
+
 function recommendationButton(chart, label = 'Open Chart') {
     const chartPayload = encodeURIComponent(JSON.stringify(chart));
     return `<button class="btn btn-primary use-recommendation" data-chart="${chartPayload}">${label}</button>`;
@@ -807,6 +843,41 @@ async function loadAnalysisSummary() {
     renderProfiles(data.summary.column_profiles);
     renderSemanticProfiles(data.summary.semantic_profiles || []);
     renderExecutiveTakeaways(data.summary.executive_takeaways || []);
+}
+
+async function loadExecutiveReport() {
+    const response = await fetch('/executive_report');
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to generate executive report');
+    }
+    renderReportPreview(data.report);
+}
+
+async function exportReport(type) {
+    const response = await fetch('/export_report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
+            type,
+        })
+    });
+
+    if (!response.ok) {
+        const payload = await response.json();
+        throw new Error(payload.error || 'Failed to export report');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = type === 'markdown' ? 'executive_report.md' : 'executive_report.html';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.URL.revokeObjectURL(url);
 }
 
 async function applyTransform(operation, options = {}) {
@@ -1043,9 +1114,32 @@ document.addEventListener('DOMContentLoaded', async () => {
             showError(error.message);
         }
     });
+    document.getElementById('loadExecutiveReport').addEventListener('click', async () => {
+        try {
+            await loadExecutiveReport();
+            showSuccess('Executive report generated.');
+        } catch (error) {
+            showError(error.message);
+        }
+    });
+    document.getElementById('exportHtmlReport').addEventListener('click', async () => {
+        try {
+            await exportReport('html');
+        } catch (error) {
+            showError(error.message);
+        }
+    });
+    document.getElementById('exportMarkdownReport').addEventListener('click', async () => {
+        try {
+            await exportReport('markdown');
+        } catch (error) {
+            showError(error.message);
+        }
+    });
 
     try {
         await loadAnalysisSummary();
+        await loadExecutiveReport();
     } catch (error) {
         showError(error.message);
         document.getElementById('qualityAlerts').textContent = 'Unable to inspect the dataset.';
@@ -1054,6 +1148,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('columnProfiles').textContent = 'Column profiling could not be loaded.';
         document.getElementById('semanticProfiles').textContent = 'Semantic field inference could not be loaded.';
         document.getElementById('executiveTakeaways').textContent = 'Executive takeaways could not be generated.';
+        document.getElementById('reportPreview').textContent = 'Report preview could not be generated.';
     }
 });
 </script>

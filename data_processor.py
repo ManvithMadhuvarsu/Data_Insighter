@@ -10,8 +10,11 @@ from insight_engine import (
     anomaly_insights,
     build_executive_takeaways,
     contribution_insights,
+    funnel_insights,
+    retention_cohort_insights,
     seasonality_insights,
     segment_driver_insights,
+    variance_explanation_insights,
 )
 from semantic_model import infer_dataset_semantics
 
@@ -377,6 +380,25 @@ class DataProcessor:
                     'sample_percentage': 100,
                 })
 
+        numeric_columns = self._numeric_columns()
+        categorical_columns = self._categorical_columns()
+        if numeric_columns and not any(chart['type'] == 'kpi' for chart in recommendations):
+            recommendations.insert(0, {
+                'title': f'{numeric_columns[0]} KPI',
+                'description': 'Start with a headline KPI card so the dashboard has a clear business metric.',
+                'type': 'kpi',
+                'columns': [numeric_columns[0]],
+                'sample_percentage': 100,
+            })
+        if len(categorical_columns) >= 2 and not any(chart['type'] == 'heatmap' for chart in recommendations):
+            recommendations.append({
+                'title': f'{categorical_columns[0]} by {categorical_columns[1]} heatmap',
+                'description': 'Use a heatmap to find concentration patterns across two dimensions.',
+                'type': 'heatmap',
+                'columns': categorical_columns[:2],
+                'sample_percentage': 100,
+            })
+
         return recommendations[:6]
 
     def _advanced_insights(self) -> List[Dict[str, Any]]:
@@ -384,12 +406,16 @@ class DataProcessor:
         measures = semantics.get('measure', [])
         dimensions = semantics.get('dimension', [])
         datetimes = semantics.get('datetime', [])
+        identifiers = semantics.get('identifier', [])
 
         findings = (
             anomaly_insights(self.df, measures)
             + segment_driver_insights(self.df, dimensions, measures)
             + contribution_insights(self.df, dimensions, measures)
             + seasonality_insights(self.df, datetimes, measures)
+            + variance_explanation_insights(self.df, datetimes, dimensions, measures)
+            + funnel_insights(self.df, measures)
+            + retention_cohort_insights(self.df, datetimes, identifiers)
         )
         findings.sort(key=lambda item: item['score'], reverse=True)
         return findings[:6]

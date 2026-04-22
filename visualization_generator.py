@@ -483,6 +483,36 @@ class VisualizationGenerator:
                     for group in df[columns[0]].unique():
                         group_data = df[df[columns[0]] == group]
                         fig = add_statistical_annotations(fig, group_data, columns[1])
+
+            elif viz_type == 'kpi':
+                if not pd.api.types.is_numeric_dtype(df[columns[0]]):
+                    raise ValueError(f"Column {columns[0]} must be numeric for a KPI card")
+                value = float(df[columns[0]].sum())
+                average = float(df[columns[0]].mean())
+                fig = go.Figure(go.Indicator(
+                    mode='number+delta',
+                    value=value,
+                    number={'valueformat': ',.2f'},
+                    delta={'reference': average, 'relative': False, 'valueformat': ',.2f'},
+                    title={'text': f"Total {columns[0]}<br><span style='font-size:0.7em;color:gray'>Delta vs average row value</span>"},
+                ))
+
+            elif viz_type == 'heatmap':
+                if len(columns) < 2:
+                    raise ValueError("Heatmap requires two columns")
+                if len(columns) >= 3 and pd.api.types.is_numeric_dtype(df[columns[2]]):
+                    pivot = df.pivot_table(index=columns[1], columns=columns[0], values=columns[2], aggfunc='sum', fill_value=0)
+                    title = f'Sum of {columns[2]} by {columns[0]} and {columns[1]}'
+                else:
+                    pivot = pd.crosstab(df[columns[1]].astype(str), df[columns[0]].astype(str))
+                    title = f'Count heatmap of {columns[0]} by {columns[1]}'
+                fig = px.imshow(
+                    pivot,
+                    text_auto=True,
+                    aspect='auto',
+                    title=title,
+                    labels={'x': columns[0], 'y': columns[1], 'color': 'Value'},
+                )
             
             else:
                 raise ValueError(f"Unsupported visualization type: {viz_type}")

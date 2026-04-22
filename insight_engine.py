@@ -177,6 +177,164 @@ def seasonality_insights(df: pd.DataFrame, datetime_columns: List[str], measures
     return findings[:1]
 
 
+def variance_explanation_insights(
+    df: pd.DataFrame,
+    datetime_columns: List[str],
+    dimensions: List[str],
+    measures: List[str],
+) -> List[Dict[str, Any]]:
+    findings: List[Dict[str, Any]] = []
+    if not datetime_columns or not dimensions or not measures:
+        return findings
+
+    for date_column in datetime_columns[:1]:
+        for measure in measures[:4]:
+            working = df[[date_column, measure] + dimensions[:4]].copy()
+            working[date_column] = pd.to_datetime(working[date_column], errors='coerce')
+            working[measure] = pd.to_numeric(working[measure], errors='coerce')
+            working = working.dropna(subset=[date_column, measure])
+            if len(working) < 12:
+                continue
+
+            working['period'] = working[date_column].dt.to_period('M')
+            period_totals = working.groupby('period')[measure].sum().sort_index()
+            if len(period_totals) < 2:
+                continue
+
+            previous_period = period_totals.index[-2]
+            latest_period = period_totals.index[-1]
+            total_delta = float(period_totals.iloc[-1] - period_totals.iloc[-2])
+            if total_delta == 0:
+                continue
+
+            for dimension in dimensions[:4]:
+                segment_periods = working.groupby(['period', dimension])[measure].sum().unstack(fill_value=0)
+                if previous_period not in segment_periods.index or latest_period not in segment_periods.index:
+                    continue
+                deltas = (segment_periods.loc[latest_period] - segment_periods.loc[previous_period]).sort_values(
+                    key=lambda values: values.abs(),
+                    ascending=False,
+                )
+                if deltas.empty:
+                    continue
+                top_segment = deltas.index[0]
+                top_delta = float(deltas.iloc[0])
+                share = abs(top_delta / total_delta * 100) if total_delta else 0
+                findings.append(build_explanations({
+                    'kind': 'variance_explanation',
+                    'title': f'{dimension} explains the latest change in {measure}',
+                    'detail': f"{top_segment} contributed {top_delta:,.2f} of the latest period change ({share:.1f}% of net movement).",
+                    'score': round(abs(top_delta), 3),
+                    'stat': f'{latest_period} vs {previous_period}',
+                    'recommended_chart': {
+                        'title': f'{measure} variance by {dimension}',
+                        'description': 'Compare segment movement between recent periods to explain what changed.',
+                        'type': 'bar',
+                        'columns': [dimension, measure],
+                        'sample_percentage': 100,
+                    }
+                }, [
+                    'The engine compared the latest monthly total with the previous monthly total.',
+                    'Segment deltas identify which group most explains the net movement.',
+                ]))
+
+    findings.sort(key=lambda item: item['score'], reverse=True)
+    return findings[:2]
+
+
+def funnel_insights(df: pd.DataFrame, measures: List[str]) -> List[Dict[str, Any]]:
+    stage_order = ['visit', 'view', 'lead', 'signup', 'trial', 'cart', 'checkout', 'purchase', 'paid']
+    matched = []
+    for column in measures:
+        name = column.lower()
+        for idx, token in enumerate(stage_order):
+            if token in name:
+                matched.append((idx, column))
+                break
+
+    matched = sorted(matched)
+    if len(matched) < 2:
+        return []
+
+    stages = [column for _, column in matched[:5]]
+    totals = [(column, float(pd.to_numeric(df[column], errors='coerce').sum())) for column in stages]
+    drops = []
+    for (from_col, from_total), (to_col, to_total) in zip(totals, totals[1:]):
+        if from_total <= 0:
+            continue
+        conversion = to_total / from_total * 100
+        drops.append((from_col, to_col, conversion, from_total - to_total))
+
+    if not drops:
+        return []
+
+    weakest = sorted(drops, key=lambda item: item[2])[0]
+    return [build_explanations({
+        'kind': 'funnel',
+        'title': f'Largest funnel friction appears between {weakest[0]} and {weakest[1]}',
+        'detail': f'The observed conversion between these stages is {weakest[2]:.2f}%, with a drop of {weakest[3]:,.2f}.',
+        'score': round(100 - weakest[2], 3),
+        'stat': f'{weakest[2]:.2f}% conversion',
+        'recommended_chart': {
+            'title': 'Funnel stage totals',
+            'description': 'Review stage totals to see where the funnel loses the most volume.',
+            'type': 'bar',
+            'columns': stages[:2],
+            'sample_percentage': 100,
+        }
+    }, [
+        'Funnel stages were inferred from common stage names in numeric columns.',
+        'The weakest stage-to-stage conversion is usually the first place to investigate process friction.',
+    ])]
+
+
+def retention_cohort_insights(
+    df: pd.DataFrame,
+    datetime_columns: List[str],
+    identifier_columns: List[str],
+) -> List[Dict[str, Any]]:
+    if not datetime_columns or not identifier_columns:
+        return []
+
+    date_column = datetime_columns[0]
+    id_column = identifier_columns[0]
+    working = df[[date_column, id_column]].copy()
+    working[date_column] = pd.to_datetime(working[date_column], errors='coerce')
+    working[id_column] = working[id_column].astype(str)
+    working = working.dropna(subset=[date_column, id_column])
+    if working[id_column].nunique() < 10 or len(working) < 20:
+        return []
+
+    working['period'] = working[date_column].dt.to_period('M')
+    first_period = working.groupby(id_column)['period'].min()
+    working = working.join(first_period.rename('cohort'), on=id_column)
+    cohort_sizes = working.groupby('cohort')[id_column].nunique()
+    repeat_counts = working[working['period'] > working['cohort']].groupby('cohort')[id_column].nunique()
+    retention = (repeat_counts / cohort_sizes * 100).dropna()
+    if retention.empty:
+        return []
+
+    strongest = retention.sort_values(ascending=False).index[0]
+    value = float(retention.loc[strongest])
+    return [build_explanations({
+        'kind': 'retention_cohort',
+        'title': f'{strongest} cohort has the strongest repeat activity',
+        'detail': f'{value:.2f}% of entities in that cohort appear again in a later period.',
+        'score': round(value, 3),
+        'stat': f'{value:.2f}% repeat rate',
+        'recommended_chart': {
+            'title': f'{id_column} cohort retention',
+            'description': 'Inspect repeat activity by cohort to understand retention-style behavior.',
+            'type': 'heatmap',
+            'columns': [date_column, id_column],
+            'sample_percentage': 100,
+        }
+    }, [
+        'Cohorts were inferred from each identifier\'s first observed month.',
+        'Repeat activity is estimated by checking whether an entity appears in later months.',
+    ])]
+
+
 def build_executive_takeaways(insights: List[Dict[str, Any]], quality_alerts: List[Dict[str, Any]]) -> List[str]:
     takeaways: List[str] = []
     if quality_alerts:
@@ -187,4 +345,3 @@ def build_executive_takeaways(insights: List[Dict[str, Any]], quality_alerts: Li
         takeaways.append(f"{insight['title']}: {insight['detail']}")
 
     return takeaways[:4]
-

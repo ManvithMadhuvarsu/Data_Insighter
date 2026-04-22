@@ -12,6 +12,7 @@ uploads/*
 !uploads/.gitkeep
 output/*
 !output/.gitkeep
+workspace_data/
 .venv/
 venv/
 ENV/

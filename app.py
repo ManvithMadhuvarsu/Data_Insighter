@@ -19,6 +19,7 @@ from workspace_store import (
     get_dataset_record,
     list_dataset_records,
 )
+from transform_service import apply_transform
 
 # Load environment variables from .env file
 load_dotenv()
@@ -101,6 +102,13 @@ def cleanup_uploaded_file(filepath):
             os.remove(filepath)
         except OSError:
             pass
+
+def store_derived_dataset(df, base_name):
+    safe_base = secure_filename(os.path.splitext(base_name)[0] or 'dataset')
+    filename = f"{safe_base}_derived_{int(time.time())}_{secrets.token_hex(4)}.csv"
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    df.to_csv(filepath, index=False)
+    return filepath, filename
 
 def login_required(view):
     """Require an authenticated session for app pages and APIs."""
@@ -374,6 +382,64 @@ def analysis_summary():
             'success': True,
             'summary': processor.get_analysis_summary(),
             'dataset': dataset_record,
+        })
+    except Exception as e:
+        return error_response(str(e), 400)
+
+@app.route('/apply_transform', methods=['POST'])
+@login_required
+def apply_dataset_transform():
+    if not validate_csrf_token():
+        return error_response('Invalid request token', 400)
+
+    filepath = session.get('current_filepath')
+    if not filepath or not os.path.exists(filepath):
+        return error_response('No active dataset found. Load a dataset first.', 400)
+
+    payload = request.get_json(silent=True) or {}
+    operation = payload.get('operation')
+    options = payload.get('options') or {}
+
+    if not operation:
+        return error_response('No transform operation was provided.', 400)
+
+    try:
+        df = read_data_file(filepath)
+        transformed_df, description = apply_transform(df, operation, options)
+        if transformed_df.empty:
+            return error_response('This transform produced an empty dataset, so it was not applied.', 400)
+
+        current_record = None
+        if session.get('current_dataset_id'):
+            current_record = get_dataset_record(session['user'], session['current_dataset_id'])
+
+        source_name = current_record['source_name'] if current_record else os.path.basename(filepath)
+        derived_path, derived_filename = store_derived_dataset(transformed_df, source_name)
+        dataset_record = create_dataset_record(
+            session['user'],
+            source_name=derived_filename,
+            stored_path=derived_path,
+            source_type='derived',
+            row_count=len(transformed_df),
+            column_count=len(transformed_df.columns),
+            parent_dataset_id=current_record['id'] if current_record else None,
+            metadata={
+                'display_name': f"{current_record.get('metadata', {}).get('display_name', source_name) if current_record else source_name} · transformed",
+                'columns': transformed_df.columns.tolist(),
+                'transform_operation': operation,
+                'transform_description': description,
+            },
+        )
+
+        session['current_dataset_id'] = dataset_record['id']
+        session['current_filepath'] = derived_path
+
+        processor = DataProcessor(derived_path)
+        return jsonify({
+            'success': True,
+            'message': description,
+            'dataset': dataset_record,
+            'summary': processor.get_analysis_summary(),
         })
     except Exception as e:
         return error_response(str(e), 400)

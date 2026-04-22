@@ -44,6 +44,86 @@
             <div class="panel">
                 <div class="panel-header">
                     <div>
+                        <p class="eyebrow">Preparation Studio</p>
+                        <h2>Clean and shape data</h2>
+                    </div>
+                </div>
+
+                <div class="prep-grid">
+                    <button class="prep-action" data-operation="drop_duplicates">
+                        <strong>Drop duplicates</strong>
+                        <span>Remove repeated rows before analysis.</span>
+                    </button>
+                    <button class="prep-action" data-operation="trim_text">
+                        <strong>Trim text fields</strong>
+                        <span>Clean leading and trailing whitespace from strings.</span>
+                    </button>
+                    <button class="prep-action" data-operation="fill_numeric_median">
+                        <strong>Fill numeric blanks</strong>
+                        <span>Replace missing numeric values with each column median.</span>
+                    </button>
+                </div>
+
+                <div class="transform-form">
+                    <label for="sparseThreshold">Drop sparse columns above</label>
+                    <div class="inline-form">
+                        <input id="sparseThreshold" type="number" min="5" max="95" value="40">
+                        <button id="dropSparseColumns" class="btn btn-outline">Apply</button>
+                    </div>
+                </div>
+
+                <div class="transform-form">
+                    <label for="datePartColumn">Create date parts from</label>
+                    <div class="inline-form">
+                        <select id="datePartColumn">
+                            <option value="">Choose a column</option>
+                            {% for column in columns %}
+                            <option value="{{ column }}">{{ column }}</option>
+                            {% endfor %}
+                        </select>
+                        <button id="createDateParts" class="btn btn-outline">Apply</button>
+                    </div>
+                </div>
+
+                <div class="transform-form">
+                    <label>Calculated field</label>
+                    <input id="calcColumnName" type="text" placeholder="New column name">
+                    <div class="calc-grid">
+                        <select id="calcLeftColumn">
+                            <option value="">Left column</option>
+                            {% for column in columns %}
+                            <option value="{{ column }}">{{ column }}</option>
+                            {% endfor %}
+                        </select>
+                        <select id="calcOperator">
+                            <option value="+">+</option>
+                            <option value="-">-</option>
+                            <option value="*">*</option>
+                            <option value="/">/</option>
+                        </select>
+                        <select id="calcRightMode">
+                            <option value="column">Column</option>
+                            <option value="constant">Constant</option>
+                        </select>
+                    </div>
+                    <div class="calc-grid">
+                        <select id="calcRightColumn">
+                            <option value="">Right column</option>
+                            {% for column in columns %}
+                            <option value="{{ column }}">{{ column }}</option>
+                            {% endfor %}
+                        </select>
+                        <input id="calcConstant" type="number" step="any" placeholder="Constant value" style="display:none;">
+                        <button id="createCalculatedField" class="btn btn-primary">Create</button>
+                    </div>
+                </div>
+
+                <div id="prepStatus" class="prep-status">Derived datasets created here become new workspace versions, so the original upload stays intact.</div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
                         <p class="eyebrow">Quality Check</p>
                         <h2>Data health</h2>
                     </div>
@@ -271,6 +351,51 @@
 .profile-list {
     display: grid;
     gap: 12px;
+}
+
+.prep-grid {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.prep-action {
+    text-align: left;
+    border: 1px solid #eaecf0;
+    border-radius: 14px;
+    background: #fff;
+    padding: 12px 14px;
+    cursor: pointer;
+}
+
+.prep-action span {
+    display: block;
+    margin-top: 4px;
+    color: #667085;
+    font-size: 0.92rem;
+}
+
+.transform-form {
+    display: grid;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.inline-form,
+.calc-grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+}
+
+.calc-grid {
+    grid-template-columns: 1fr 90px 1fr;
+}
+
+.prep-status {
+    margin-top: 14px;
+    color: #667085;
+    font-size: 0.93rem;
 }
 
 .insight-card,
@@ -633,6 +758,35 @@ async function loadAnalysisSummary() {
     renderProfiles(data.summary.column_profiles);
 }
 
+async function applyTransform(operation, options = {}) {
+    const prepStatus = document.getElementById('prepStatus');
+    prepStatus.textContent = 'Applying transform and creating a new dataset version...';
+
+    try {
+        const response = await fetch('/apply_transform', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
+                operation,
+                options,
+            })
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.error || 'The transform could not be applied.');
+        }
+
+        prepStatus.textContent = data.message;
+        showSuccess(data.message);
+        window.location.reload();
+    } catch (error) {
+        prepStatus.textContent = error.message;
+        showError(error.message);
+    }
+}
+
 function applyRecommendation(chart) {
     setSelectedColumns(chart.columns);
     document.getElementById('chartType').value = chart.type;
@@ -786,6 +940,41 @@ function setupFilters() {
         const value = Math.min(100, Math.max(10, parseInt(numberInput.value || '100', 10)));
         numberInput.value = value;
         slider.value = value;
+    });
+
+    document.querySelectorAll('.prep-action').forEach((button) => {
+        button.addEventListener('click', () => applyTransform(button.dataset.operation));
+    });
+
+    document.getElementById('dropSparseColumns').addEventListener('click', () => {
+        applyTransform('drop_sparse_columns', { threshold: document.getElementById('sparseThreshold').value });
+    });
+
+    document.getElementById('createDateParts').addEventListener('click', () => {
+        const column = document.getElementById('datePartColumn').value;
+        applyTransform('create_date_parts', { column });
+    });
+
+    const rightMode = document.getElementById('calcRightMode');
+    const rightColumn = document.getElementById('calcRightColumn');
+    const rightConstant = document.getElementById('calcConstant');
+
+    rightMode.addEventListener('change', () => {
+        const useColumn = rightMode.value === 'column';
+        rightColumn.style.display = useColumn ? '' : 'block';
+        rightConstant.style.display = useColumn ? 'none' : 'block';
+    });
+
+    document.getElementById('createCalculatedField').addEventListener('click', () => {
+        applyTransform('create_calculated_column', {
+            new_column: document.getElementById('calcColumnName').value,
+            left: document.getElementById('calcLeftColumn').value,
+            operator: document.getElementById('calcOperator').value,
+            right_mode: rightMode.value,
+            right_value: rightMode.value === 'column'
+                ? document.getElementById('calcRightColumn').value
+                : document.getElementById('calcConstant').value,
+        });
     });
 }
 

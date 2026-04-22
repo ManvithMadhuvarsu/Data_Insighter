@@ -7,7 +7,6 @@ import os
 from datetime import datetime
 import numpy as np
 from scipy import stats
-import seaborn as sns
 from sklearn.linear_model import LinearRegression
 from file_utils import read_data_file
 
@@ -203,6 +202,24 @@ class VisualizationGenerator:
         
         sample_size = max(1, int(len(self.df) * (percentage / 100)))
         return self.df.sample(n=sample_size, random_state=42)
+
+    def _prepare_subset(self, columns: List[str], sample_percentage: int) -> pd.DataFrame:
+        df = self._sample_data(sample_percentage)
+        df = df[columns].copy()
+        df = df.dropna(how='all')
+
+        for col in columns:
+            if df[col].dtype == 'object':
+                numeric_series = pd.to_numeric(df[col], errors='coerce')
+                if numeric_series.notna().mean() >= 0.8:
+                    df[col] = numeric_series
+                    continue
+
+                datetime_series = pd.to_datetime(df[col], errors='coerce')
+                if datetime_series.notna().mean() >= 0.8:
+                    df[col] = datetime_series
+
+        return df.dropna(how='all')
         
     def generate_visualization(self, columns: List[str], viz_type: str, sample_percentage: int = 100) -> Dict:
         """Generate a single visualization based on columns and type."""
@@ -218,24 +235,9 @@ class VisualizationGenerator:
             if missing_cols:
                 raise ValueError(f"Columns not found: {', '.join(missing_cols)}")
             
-            # Sample the data
-            df = self._sample_data(sample_percentage)
-            
-            # Create a copy with only the needed columns
-            df = df[columns].copy()
-            
-            # Handle data types for visualization
-            for col in columns:
-                if df[col].dtype == 'object':
-                    # For categorical data in bar charts, we'll keep as is
-                    if viz_type != 'bar' and viz_type != 'pie':
-                        try:
-                            # Try converting to numeric for other chart types
-                            numeric_series = pd.to_numeric(df[col])
-                            df[col] = numeric_series
-                        except (ValueError, TypeError):
-                            # If conversion fails, keep as is for categorical data
-                            pass
+            df = self._prepare_subset(columns, sample_percentage)
+            if df.empty:
+                raise ValueError("The selected columns do not contain enough usable values to visualize")
             
             # Enhanced statistical analysis
             def add_statistical_annotations(fig, df, x_col, y_col=None):
@@ -303,8 +305,10 @@ class VisualizationGenerator:
                         )
             
             elif viz_type == 'line':
+                if len(columns) < 2:
+                    raise ValueError("Line chart requires at least 2 columns")
                 # Ensure x-axis data is sorted
-                if pd.api.types.is_numeric_dtype(df[columns[0]]):
+                if pd.api.types.is_numeric_dtype(df[columns[0]]) or pd.api.types.is_datetime64_any_dtype(df[columns[0]]):
                     df = df.sort_values(by=columns[0])
                 fig = px.line(df, x=columns[0], y=columns[1:],
                             title=f'Line Chart of {", ".join(columns)}')
@@ -370,8 +374,16 @@ class VisualizationGenerator:
                 
                 # Calculate optimal number of bins using Freedman-Diaconis rule
                 iqr = df[columns[0]].quantile(0.75) - df[columns[0]].quantile(0.25)
-                bin_width = 2 * iqr / (len(df) ** (1/3))
-                num_bins = int((df[columns[0]].max() - df[columns[0]].min()) / bin_width)
+                if iqr and len(df) > 1:
+                    bin_width = 2 * iqr / (len(df) ** (1/3))
+                else:
+                    bin_width = 0
+
+                if bin_width and np.isfinite(bin_width) and bin_width > 0:
+                    num_bins = int((df[columns[0]].max() - df[columns[0]].min()) / bin_width)
+                else:
+                    num_bins = min(max(int(np.sqrt(len(df))), 10), 60)
+                num_bins = max(num_bins, 5)
                 
                 fig = px.histogram(
                     df, 
@@ -386,14 +398,16 @@ class VisualizationGenerator:
                 
                 # Add normal distribution overlay
                 x_range = np.linspace(df[columns[0]].min(), df[columns[0]].max(), 100)
-                y_range = stats.norm.pdf(x_range, df[columns[0]].mean(), df[columns[0]].std())
-                fig.add_trace(go.Scatter(
-                    x=x_range,
-                    y=y_range * len(df) * (df[columns[0]].max() - df[columns[0]].min()) / num_bins,
-                    mode='lines',
-                    name='Normal Distribution',
-                    line=dict(color='red', dash='dash')
-                ))
+                std = df[columns[0]].std()
+                if std and np.isfinite(std) and std > 0:
+                    y_range = stats.norm.pdf(x_range, df[columns[0]].mean(), std)
+                    fig.add_trace(go.Scatter(
+                        x=x_range,
+                        y=y_range * len(df) * (df[columns[0]].max() - df[columns[0]].min()) / num_bins,
+                        mode='lines',
+                        name='Normal Distribution',
+                        line=dict(color='red', dash='dash')
+                    ))
             
             elif viz_type == 'box':
                 if len(columns) == 1:

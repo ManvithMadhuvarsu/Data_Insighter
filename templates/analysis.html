@@ -8,138 +8,445 @@
 {% endblock %}
 
 {% block content %}
-<div class="analysis-container">
-    <!-- Control Panel -->
-    <div class="control-panel">
-        <h3>Visualization Controls</h3>
-        
-        <!-- Column Selection -->
-        <div class="section">
-            <h4>Select Columns</h4>
-            <div class="column-list">
-                {% for column in columns %}
-                <div class="column-item">
-                    <label>
-                        <input type="checkbox" name="column" value="{{ column }}">
-                        {{ column }}
-                    </label>
+<div class="analysis-shell">
+    <section class="insight-header">
+        <div>
+            <p class="eyebrow">Analyst Workspace</p>
+            <h1>Dataset-driven insights</h1>
+            <p class="subcopy">Review data quality, spot important signals, and build charts that are grounded in what your uploaded dataset is actually saying.</p>
+        </div>
+        <div class="header-actions">
+            <button id="refreshInsights" class="btn btn-secondary">Refresh Insights</button>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-outline">Open Dashboard</a>
+        </div>
+    </section>
+
+    <section id="summarySection" class="summary-grid">
+        <div class="summary-card skeleton"></div>
+        <div class="summary-card skeleton"></div>
+        <div class="summary-card skeleton"></div>
+        <div class="summary-card skeleton"></div>
+        <div class="summary-card skeleton"></div>
+        <div class="summary-card skeleton"></div>
+    </section>
+
+    <section class="analysis-layout">
+        <aside class="analysis-sidebar">
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow">Quality Check</p>
+                        <h2>Data health</h2>
+                    </div>
                 </div>
-                {% endfor %}
+                <div id="qualityAlerts" class="stack-list loading-text">Inspecting completeness, duplicates, and column risk...</div>
             </div>
-        </div>
 
-        <!-- Chart Type Selection -->
-        <div class="section">
-            <h4>Select Chart Type</h4>
-            <div class="chart-types">
-                <label>
-                    <input type="radio" name="chartType" value="bar">
-                    Bar Chart
-                </label>
-                <label>
-                    <input type="radio" name="chartType" value="line">
-                    Line Chart
-                </label>
-                <label>
-                    <input type="radio" name="chartType" value="scatter">
-                    Scatter Plot
-                </label>
-                <label>
-                    <input type="radio" name="chartType" value="pie">
-                    Pie Chart
-                </label>
-                <label>
-                    <input type="radio" name="chartType" value="histogram">
-                    Histogram
-                </label>
-                <label>
-                    <input type="radio" name="chartType" value="box">
-                    Box Plot
-                </label>
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow">Key Findings</p>
+                        <h2>Signals worth exploring</h2>
+                    </div>
+                </div>
+                <div id="keyInsights" class="stack-list loading-text">Finding relationships, outliers, and dominant segments...</div>
             </div>
-        </div>
 
-        <!-- Sample Size -->
-        <div class="section">
-            <h4>Sample Size</h4>
-            <input type="range" id="percentageSlider" min="1" max="100" value="100">
-            <input type="number" id="dataSamplePercentage" min="1" max="100" value="100">
-            <span>%</span>
-        </div>
-
-        <!-- Generate Button -->
-        <button id="generateChart" class="btn btn-primary">Generate Visualization</button>
-        <button id="addToDashboardBtn" class="btn btn-primary" style="display:none; margin-top:10px;">Add to Dashboard</button>
-    </div>
-
-    <!-- Visualization Area -->
-    <div class="visualization-panel">
-        <div id="chartArea" class="chart-area">
-            <!-- Loading Spinner -->
-            <div id="loadingSpinner" class="loading-spinner" style="display: none;">
-                <div class="spinner"></div>
-                <p>Generating visualization...</p>
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow">Column Guide</p>
+                        <h2>Field profiles</h2>
+                    </div>
+                </div>
+                <div id="columnProfiles" class="profile-list loading-text">Building column-by-column summaries...</div>
             </div>
-            <div id="plotContainer"></div>
-        </div>
-    </div>
+        </aside>
+
+        <main class="analysis-main">
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow">Recommended</p>
+                        <h2>Suggested visuals</h2>
+                    </div>
+                </div>
+                <div id="recommendedCharts" class="recommendation-grid loading-text">Preparing recommendation set...</div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow">Chart Builder</p>
+                        <h2>Create or refine a view</h2>
+                    </div>
+                </div>
+
+                <div class="builder-grid">
+                    <div class="control-group">
+                        <label for="columnSearch">Find columns</label>
+                        <input id="columnSearch" type="text" placeholder="Search fields...">
+                    </div>
+                    <div class="control-group">
+                        <label for="chartType">Chart type</label>
+                        <select id="chartType">
+                            <option value="">Select a chart type</option>
+                            <option value="bar">Bar chart</option>
+                            <option value="line">Line chart</option>
+                            <option value="scatter">Scatter plot</option>
+                            <option value="pie">Pie chart</option>
+                            <option value="histogram">Histogram</option>
+                            <option value="box">Box plot</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="dataSamplePercentage">Sample size</label>
+                        <div class="sample-controls">
+                            <input type="range" id="percentageSlider" min="10" max="100" value="100">
+                            <input type="number" id="dataSamplePercentage" min="10" max="100" value="100">
+                            <span>%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="column-actions">
+                    <button id="selectAllColumns" class="btn btn-outline">Select All</button>
+                    <button id="clearColumns" class="btn btn-outline">Clear</button>
+                </div>
+
+                <div id="columnList" class="column-grid">
+                    {% for column in columns %}
+                    <label class="column-chip" data-column="{{ column|lower }}">
+                        <input type="checkbox" name="column" value="{{ column }}">
+                        <span>{{ column }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+
+                <div class="builder-actions">
+                    <button id="generateChart" class="btn btn-primary">Generate Visualization</button>
+                    <button id="addToDashboardBtn" class="btn btn-secondary" style="display:none;">Add to Dashboard</button>
+                </div>
+            </div>
+
+            <div class="panel chart-panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow">Interactive View</p>
+                        <h2 id="chartTitle">Visualization canvas</h2>
+                    </div>
+                    <p id="chartDescription" class="panel-note">Use a recommendation or choose your own fields to build a chart.</p>
+                </div>
+                <div id="chartStatus" class="chart-status">No visualization generated yet.</div>
+                <div id="chartArea" class="chart-area">
+                    <div id="loadingSpinner" class="loading-spinner" style="display: none;">
+                        <div class="spinner"></div>
+                        <p>Generating visualization...</p>
+                    </div>
+                    <div id="plotContainer"></div>
+                </div>
+            </div>
+        </main>
+    </section>
 </div>
 
 <style>
-.analysis-container {
+.analysis-shell {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+.insight-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #a16207;
+    margin-bottom: 8px;
+}
+
+.insight-header h1,
+.panel-header h2 {
+    margin-bottom: 8px;
+}
+
+.subcopy,
+.panel-note {
+    color: #667085;
+    max-width: 760px;
+}
+
+.header-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.summary-grid {
     display: grid;
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.summary-card,
+.panel {
+    background: #fff;
+    border: 1px solid #e4e7ec;
+    border-radius: 18px;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+.summary-card {
+    padding: 18px;
+}
+
+.summary-label {
+    color: #667085;
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+}
+
+.summary-value {
+    font-size: 1.9rem;
+    font-weight: 700;
+    color: #101828;
+}
+
+.summary-footnote {
+    margin-top: 10px;
+    color: #475467;
+    font-size: 0.9rem;
+}
+
+.analysis-layout {
+    display: grid;
+    grid-template-columns: 360px minmax(0, 1fr);
     gap: 20px;
-    padding: 20px;
 }
 
-.control-panel {
-    background: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.section {
-    margin-bottom: 20px;
-}
-
-.column-list {
-    max-height: 300px;
-    overflow-y: auto;
-    border: 1px solid #ddd;
-    padding: 10px;
-    border-radius: 4px;
-}
-
-.chart-types {
+.analysis-sidebar,
+.analysis-main {
     display: flex;
     flex-direction: column;
+    gap: 20px;
+}
+
+.panel {
+    padding: 20px;
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
+    margin-bottom: 16px;
+}
+
+.stack-list,
+.profile-list {
+    display: grid;
+    gap: 12px;
+}
+
+.insight-card,
+.alert-card,
+.profile-card,
+.recommendation-card {
+    border: 1px solid #eaecf0;
+    border-radius: 14px;
+    padding: 14px;
+    background: #fcfcfd;
+}
+
+.alert-card.warning { border-left: 4px solid #f79009; }
+.alert-card.info { border-left: 4px solid #2e90fa; }
+.alert-card.success { border-left: 4px solid #12b76a; }
+
+.card-title {
+    font-weight: 700;
+    color: #101828;
+    margin-bottom: 6px;
+}
+
+.card-detail {
+    color: #475467;
+    font-size: 0.95rem;
+    line-height: 1.45;
+}
+
+.card-stat {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 4px 8px;
+    background: #f2f4f7;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    color: #344054;
+}
+
+.recommendation-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.recommendation-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.recommendation-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.builder-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 14px;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.control-group label {
+    font-weight: 600;
+    color: #344054;
+}
+
+.control-group input,
+.control-group select {
+    border: 1px solid #d0d5dd;
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-size: 0.95rem;
+}
+
+.sample-controls {
+    display: flex;
+    align-items: center;
     gap: 10px;
 }
 
-.visualization-panel {
-    background: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+.sample-controls input[type="range"] {
+    flex: 1;
+}
+
+.sample-controls input[type="number"] {
+    width: 80px;
+}
+
+.column-actions,
+.builder-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+
+.column-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+.column-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid #d0d5dd;
+    border-radius: 14px;
+    cursor: pointer;
+    background: #fff;
+}
+
+.column-chip input {
+    margin: 0;
+}
+
+.column-chip.active {
+    border-color: #f79009;
+    background: #fff7ed;
+}
+
+.chart-panel {
+    min-height: 700px;
+}
+
+.chart-status {
+    color: #667085;
+    margin-bottom: 12px;
+}
+
+.chart-area {
+    min-height: 560px;
+    position: relative;
+    border: 1px dashed #d0d5dd;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #fff 0%, #fcfcfd 100%);
+    padding: 16px;
+}
+
+#plotContainer {
+    width: 100%;
+    min-height: 520px;
 }
 
 .loading-spinner {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.82);
+    z-index: 2;
 }
 
 .spinner {
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #3498db;
+    border: 4px solid #f2f4f7;
+    border-top: 4px solid #f79009;
     border-radius: 50%;
     width: 40px;
     height: 40px;
     animation: spin 1s linear infinite;
+    margin-bottom: 12px;
+}
+
+.loading-text {
+    color: #667085;
+}
+
+.skeleton {
+    min-height: 108px;
+    background: linear-gradient(90deg, #f2f4f7 25%, #eaecf0 50%, #f2f4f7 75%);
+    background-size: 200% 100%;
+    animation: pulse 1.2s infinite linear;
+}
+
+@keyframes pulse {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
 }
 
 @keyframes spin {
@@ -147,332 +454,351 @@
     100% { transform: rotate(360deg); }
 }
 
-/* Add the new styles you provided */
-.notification {
-    position: fixed;
-    top: 15px;
-    right: 15px;
-    padding: 8px 15px;
-    border-radius: 3px;
-    color: white;
-    z-index: 1000;
-    font-size: 14px;
-    line-height: 1.2;
-    max-width: 150px;
-    animation: slideIn 0.5s ease-out;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-}
-
-.notification.error {
-    background-color: #ff4444;
-}
-
-.notification.success {
-    background-color: #4CAF50;
-}
-
-@keyframes slideIn {
-    from {
-        transform: translateX(100%);
-        opacity: 0;
+@media (max-width: 1200px) {
+    .summary-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
-    to {
-        transform: translateX(0);
-        opacity: 1;
+
+    .analysis-layout {
+        grid-template-columns: 1fr;
     }
 }
 
-#plotContainer {
-    width: 100%;
-    height: 100%;
-    min-height: 500px;
-}
+@media (max-width: 760px) {
+    .analysis-shell {
+        padding: 16px;
+    }
 
-.chart-area {
-    width: 100%;
-    height: 100%;
-    min-height: 500px;
-    position: relative;
+    .insight-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .summary-grid,
+    .recommendation-grid,
+    .builder-grid {
+        grid-template-columns: 1fr;
+    }
 }
 </style>
+{% endblock %}
 
+{% block scripts %}
 <script>
-    // Keep track of the current plot
-    let currentPlot = null;
-    
-    // Function to completely remove the previous visualization and prepare for new one
-    function clearAndPrepareVisualization() {
-        // Get the chart area and plot container
-        const chartArea = document.getElementById('chartArea');
-        const plotContainer = document.getElementById('plotContainer');
-    
-        // If there's an existing plot, properly destroy it
-        if (currentPlot && plotContainer) {
-            Plotly.purge(plotContainer);
-            currentPlot = null;
-        }
-    
-        // Clear and reset the chart area
-        chartArea.innerHTML = `
-            <div id="loadingSpinner" class="loading-spinner" style="display: none;">
-                <div class="spinner"></div>
-                <p>Generating visualization...</p>
-            </div>
-            <div id="plotContainer" style="width: 100%; height: 100%;"></div>
-        `;
-    
-        return document.getElementById('plotContainer');
-    }
-    
-    // Main function to generate visualization
-    async function generateVisualization() {
-        // Get current selections
-        const selectedColumns = [...document.querySelectorAll('input[name="column"]:checked')]
-            .map(cb => cb.value);
-        
-        const selectedType = document.querySelector('input[name="chartType"]:checked')?.value;
-        const samplePercentage = parseInt(document.getElementById('dataSamplePercentage').value);
-    
-        // Validate selections
-        if (!selectedColumns.length) {
-            showError('Please select at least one column');
-            return;
-        }
-    
-        if (!selectedType) {
-            showError('Please select a chart type');
-            return;
-        }
-    
-        // Clear previous visualization and get new container
-        const plotContainer = clearAndPrepareVisualization();
-        // Hide Add to Dashboard button until next successful viz
-        document.getElementById('addToDashboardBtn').style.display = 'none';
-    
-        // Show loading spinner
-        const loadingSpinner = document.getElementById('loadingSpinner');
-        loadingSpinner.style.display = 'block';
-        
-        try {
-            // Make API call to generate visualization
-            // FIX #5: No filepath sent — server reads it from session
-            const response = await fetch('/generate_visualization', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
-                    columns: selectedColumns,
-                    type: selectedType,
-                    sample_percentage: samplePercentage
-                })
-            });
-    
-            const data = await response.json();
-            
-            if (data.success) {
-                // Create new visualization with the response data
-                await createVisualization(data.visualization, plotContainer);
-            } else {
-                showError(data.error || 'Failed to generate visualization');
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            showError('Error generating visualization: ' + error.message);
-        } finally {
-            // Hide loading spinner
-            loadingSpinner.style.display = 'none';
-        }
-    }
-    
-    // Function to create the visualization
-    async function createVisualization(vizData, container) {
-        try {
-            // Calculate container dimensions
-            const containerWidth = 800;
-            const containerHeight = 800;
-    
-            // Prepare layout with responsive dimensions
-            const layout = {
-                ...vizData.layout,
-                width: containerWidth,
-                height: containerHeight,
-                autosize: true,
-                margin: { l: 50, r: 30, t: 50, b: 50 },
-                font: { size: 12 },
-                showlegend: true
-            };
-    
-            // Create new plot
-            await Plotly.newPlot(container, vizData.data, layout, {
-                responsive: true,
-                displayModeBar: true,
-                displaylogo: false,
-                modeBarButtonsToRemove: ['sendDataToCloud'],
-                toImageButtonOptions: {
-                    format: 'png',
-                    filename: 'visualization',
-                    height: containerHeight,
-                    width: containerWidth,
-                    scale: 2
-                }
-            });
+let currentPlot = null;
+let currentChartMeta = null;
 
-            // Show and set up the Add to Dashboard button
-            const addToDashboardBtn = document.getElementById('addToDashboardBtn');
-            addToDashboardBtn.style.display = 'block';
-            addToDashboardBtn.onclick = async () => {
-                try {
-                    // Get the current visualization parameters
-                    const selectedColumns = [...document.querySelectorAll('input[name="column"]:checked')]
-                        .map(cb => cb.value);
-                    const selectedType = document.querySelector('input[name="chartType"]:checked')?.value;
-                    const samplePercentage = parseInt(document.getElementById('dataSamplePercentage').value);
+function selectedColumns() {
+    return [...document.querySelectorAll('input[name="column"]:checked')].map((checkbox) => checkbox.value);
+}
 
-                    if (!selectedColumns.length || !selectedType) {
-                        showError('Please select columns and chart type');
-                        return;
-                    }
-
-                    // Get the current visualization data from Plotly
-                    const plotData = await Plotly.toImage(container, {
-                        format: 'png',
-                        width: container.offsetWidth,
-                        height: container.offsetHeight
-                    });
-
-                    // Create visualization configuration
-                    // FIX #5: No filepath stored on client
-                    const currentViz = {
-                        id: Date.now(),
-                        type: selectedType,
-                        columns: selectedColumns,
-                        samplePercentage: samplePercentage,
-                        thumbnail: plotData,
-                        position: { x: 0, y: 0 },
-                        size: { width: 400, height: 300 }
-                    };
-
-                    // Save to localStorage
-                    const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
-                    dashboardViz.push(currentViz);
-                    localStorage.setItem('dashboardViz', JSON.stringify(dashboardViz));
-                    
-                    showSuccess('Visualization added to dashboard!');
-                    
-                    // Redirect to dashboard page
-                    setTimeout(() => {
-                        window.location.href = '/dashboard';
-                    }, 1500);
-                } catch (error) {
-                    console.error('Error adding to dashboard:', error);
-                    showError('Failed to add visualization to dashboard: ' + error.message);
-                }
-            };
-    
-            // Store reference to new plot
-            currentPlot = container;
-    
-            // Handle window resizing
-            const handleResize = debounce(() => {
-                if (currentPlot) {
-                    const newWidth = container.parentElement.offsetWidth;
-                    const newHeight = Math.max(500, window.innerHeight * 0.7);
-                    Plotly.relayout(currentPlot, {
-                        width: newWidth,
-                        height: newHeight
-                    });
-                }
-            }, 250);
-    
-            // Remove any existing resize listener and add new one
-            window.removeEventListener('resize', handleResize);
-            window.addEventListener('resize', handleResize);
-    
-        } catch (error) {
-            console.error('Error creating visualization:', error);
-            showError('Error creating visualization: ' + error.message);
-        }
-    }
-    
-    // Utility function to debounce resize events
-    function debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
-    
-    // Function to show notifications (both error and success)
-    function showNotification(message, type = 'error', duration = 3000) {
-        // Remove any existing notifications
-        const existingNotifications = document.querySelectorAll('.notification');
-        existingNotifications.forEach(notification => notification.remove());
-
-        // Create new notification
-        const notification = document.createElement('div');
-        notification.className = `notification ${type}`;
-        notification.textContent = message;
-        document.body.appendChild(notification);
-        
-        // Remove after specified duration
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.remove();
-            }
-        }, duration);
-    }
-
-    // Separate functions for error and success notifications
-    function showError(message) {
-        showNotification(message, 'error', 5000); // Errors show for 5 seconds
-    }
-
-    function showSuccess(message) {
-        showNotification(message, 'success', 2000); // Success messages show for 2 seconds
-    }
-    
-    // Initialize the page
-    function initializePage() {
-        // Set up generate button with fresh event listener
-        const generateButton = document.getElementById('generateChart');
-        if (generateButton) {
-            // Remove any existing listeners by cloning
-            const newButton = generateButton.cloneNode(true);
-            generateButton.parentNode.replaceChild(newButton, generateButton);
-            // Add new click listener
-            newButton.addEventListener('click', generateVisualization);
-        }
-    
-        // Set up sample size controls
-        const percentageInput = document.getElementById('dataSamplePercentage');
-        const percentageSlider = document.getElementById('percentageSlider');
-    
-        if (percentageInput && percentageSlider) {
-            // Sync input and slider
-            percentageInput.addEventListener('input', function() {
-                let value = parseInt(this.value);
-                if (value < 1) value = 1;
-                if (value > 100) value = 100;
-                this.value = value;
-                percentageSlider.value = value;
-            });
-    
-            percentageSlider.addEventListener('input', function() {
-                percentageInput.value = this.value;
-            });
-        }
-    }
-    
-    // Initialize when DOM is loaded
-    document.addEventListener('DOMContentLoaded', function() {
-        initializePage();
+function setSelectedColumns(columns) {
+    const selectedSet = new Set(columns);
+    document.querySelectorAll('input[name="column"]').forEach((checkbox) => {
+        checkbox.checked = selectedSet.has(checkbox.value);
+        checkbox.closest('.column-chip')?.classList.toggle('active', checkbox.checked);
     });
-    </script>
-{% endblock %} 
+}
+
+function updateChipStates() {
+    document.querySelectorAll('input[name="column"]').forEach((checkbox) => {
+        checkbox.closest('.column-chip')?.classList.toggle('active', checkbox.checked);
+    });
+}
+
+function formatNumber(value) {
+    return new Intl.NumberFormat().format(value);
+}
+
+function renderSummaryCards(overview) {
+    const cards = [
+        { label: 'Rows', value: formatNumber(overview.rows), footnote: 'records available for exploration' },
+        { label: 'Columns', value: formatNumber(overview.columns), footnote: 'fields detected in the dataset' },
+        { label: 'Completeness', value: `${overview.completeness_pct}%`, footnote: 'non-missing cells across the dataset' },
+        { label: 'Numeric fields', value: formatNumber(overview.numeric_columns), footnote: 'measures ready for quantitative analysis' },
+        { label: 'Categorical fields', value: formatNumber(overview.categorical_columns), footnote: 'dimensions available for grouping and segmentation' },
+        { label: 'Duplicate rows', value: formatNumber(overview.duplicate_rows), footnote: `${overview.duplicate_pct}% of records are exact duplicates` },
+    ];
+
+    document.getElementById('summarySection').innerHTML = cards.map((card) => `
+        <div class="summary-card">
+            <div class="summary-label">${card.label}</div>
+            <div class="summary-value">${card.value}</div>
+            <div class="summary-footnote">${card.footnote}</div>
+        </div>
+    `).join('');
+}
+
+function renderQualityAlerts(alerts) {
+    document.getElementById('qualityAlerts').innerHTML = alerts.map((alert) => `
+        <div class="alert-card ${alert.severity}">
+            <div class="card-title">${alert.title}</div>
+            <div class="card-detail">${alert.detail}</div>
+        </div>
+    `).join('');
+}
+
+function renderKeyInsights(insights) {
+    if (!insights.length) {
+        document.getElementById('keyInsights').innerHTML = '<div class="insight-card"><div class="card-detail">No strong relationships were detected automatically yet. Try manual exploration with a few key business columns.</div></div>';
+        return;
+    }
+
+    document.getElementById('keyInsights').innerHTML = insights.map((insight) => `
+        <div class="insight-card">
+            <div class="card-title">${insight.title}</div>
+            <div class="card-detail">${insight.detail}</div>
+            <div class="card-stat">${insight.stat || insight.kind}</div>
+        </div>
+    `).join('');
+}
+
+function renderProfiles(profiles) {
+    document.getElementById('columnProfiles').innerHTML = profiles.slice(0, 10).map((profile) => {
+        const extras = profile.role === 'numeric'
+            ? `Mean ${profile.mean ?? 'n/a'} | Median ${profile.median ?? 'n/a'} | Outliers ${profile.outlier_pct ?? 0}%`
+            : profile.role === 'datetime'
+                ? `From ${profile.min ?? 'n/a'} to ${profile.max ?? 'n/a'}`
+                : `Top values: ${(profile.top_values || []).map((item) => `${item.label} (${item.pct}%)`).join(', ') || 'n/a'}`;
+
+        return `
+            <div class="profile-card">
+                <div class="card-title">${profile.name}</div>
+                <div class="card-detail">${profile.role} | ${profile.unique_count} unique | ${profile.missing_pct}% missing</div>
+                <div class="card-detail" style="margin-top:8px;">${extras}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function recommendationButton(chart, label = 'Open Chart') {
+    const chartPayload = encodeURIComponent(JSON.stringify(chart));
+    return `<button class="btn btn-primary use-recommendation" data-chart="${chartPayload}">${label}</button>`;
+}
+
+function renderRecommendations(charts) {
+    if (!charts.length) {
+        document.getElementById('recommendedCharts').innerHTML = '<div class="recommendation-card"><div class="card-detail">No automatic chart suggestions are available yet for this dataset.</div></div>';
+        return;
+    }
+
+    document.getElementById('recommendedCharts').innerHTML = charts.map((chart) => `
+        <div class="recommendation-card">
+            <div>
+                <div class="card-title">${chart.title}</div>
+                <div class="card-detail">${chart.description}</div>
+            </div>
+            <div class="card-detail"><strong>Type:</strong> ${chart.type} | <strong>Fields:</strong> ${chart.columns.join(', ')}</div>
+            <div class="recommendation-actions">
+                ${recommendationButton(chart)}
+            </div>
+        </div>
+    `).join('');
+
+    document.querySelectorAll('.use-recommendation').forEach((button) => {
+        button.addEventListener('click', async () => {
+            const chart = JSON.parse(decodeURIComponent(button.dataset.chart));
+            applyRecommendation(chart);
+            await generateVisualization(chart);
+        });
+    });
+}
+
+async function loadAnalysisSummary() {
+    const response = await fetch('/analysis_summary');
+    const data = await response.json();
+
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to load analysis summary');
+    }
+
+    renderSummaryCards(data.summary.dataset_overview);
+    renderQualityAlerts(data.summary.quality_alerts);
+    renderKeyInsights(data.summary.key_insights);
+    renderRecommendations(data.summary.recommended_visualizations);
+    renderProfiles(data.summary.column_profiles);
+}
+
+function applyRecommendation(chart) {
+    setSelectedColumns(chart.columns);
+    document.getElementById('chartType').value = chart.type;
+    document.getElementById('dataSamplePercentage').value = chart.sample_percentage || 100;
+    document.getElementById('percentageSlider').value = chart.sample_percentage || 100;
+    document.getElementById('chartTitle').textContent = chart.title;
+    document.getElementById('chartDescription').textContent = chart.description;
+    currentChartMeta = chart;
+}
+
+function clearAndPrepareVisualization() {
+    const chartArea = document.getElementById('chartArea');
+    const plotContainer = document.getElementById('plotContainer');
+    if (currentPlot && plotContainer) {
+        Plotly.purge(plotContainer);
+        currentPlot = null;
+    }
+
+    chartArea.innerHTML = `
+        <div id="loadingSpinner" class="loading-spinner" style="display: none;">
+            <div class="spinner"></div>
+            <p>Generating visualization...</p>
+        </div>
+        <div id="plotContainer"></div>
+    `;
+    return document.getElementById('plotContainer');
+}
+
+async function createVisualization(vizData, container) {
+    const layout = {
+        ...vizData.layout,
+        width: Math.max(container.parentElement.offsetWidth - 24, 800),
+        height: 620,
+        autosize: true,
+    };
+
+    await Plotly.newPlot(container, vizData.data, layout, {
+        responsive: true,
+        displayModeBar: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: ['sendDataToCloud'],
+    });
+
+    currentPlot = container;
+    document.getElementById('chartStatus').textContent = 'Visualization ready. Review it, refine the selection, or add it to the dashboard.';
+    document.getElementById('addToDashboardBtn').style.display = 'inline-flex';
+}
+
+async function generateVisualization(preselected = null) {
+    const columns = preselected?.columns || selectedColumns();
+    const type = preselected?.type || document.getElementById('chartType').value;
+    const samplePercentage = parseInt(preselected?.sample_percentage || document.getElementById('dataSamplePercentage').value, 10);
+
+    if (!columns.length) {
+        showError('Select at least one field to generate an insight-driven visualization.');
+        return;
+    }
+
+    if (!type) {
+        showError('Choose a chart type or use one of the recommended visuals.');
+        return;
+    }
+
+    const plotContainer = clearAndPrepareVisualization();
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    loadingSpinner.style.display = 'flex';
+    document.getElementById('chartStatus').textContent = 'Generating visualization from your uploaded dataset...';
+    document.getElementById('addToDashboardBtn').style.display = 'none';
+
+    try {
+        const response = await fetch('/generate_visualization', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
+                columns,
+                type,
+                sample_percentage: samplePercentage,
+            })
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to generate visualization');
+        }
+
+        await createVisualization(data.visualization, plotContainer);
+    } catch (error) {
+        document.getElementById('chartStatus').textContent = 'The visualization could not be generated with the current selection.';
+        showError(error.message);
+    } finally {
+        loadingSpinner.style.display = 'none';
+    }
+}
+
+async function addCurrentVisualizationToDashboard() {
+    const columns = selectedColumns();
+    const type = document.getElementById('chartType').value;
+    const samplePercentage = parseInt(document.getElementById('dataSamplePercentage').value, 10);
+
+    if (!columns.length || !type || !currentPlot) {
+        showError('Generate a visualization before adding it to the dashboard.');
+        return;
+    }
+
+    const chartTitle = currentChartMeta?.title || `${type} chart`;
+    const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
+    dashboardViz.push({
+        id: Date.now(),
+        title: chartTitle,
+        type,
+        columns,
+        samplePercentage,
+        position: { x: 0, y: 0 },
+        size: { width: 420, height: 320 }
+    });
+    localStorage.setItem('dashboardViz', JSON.stringify(dashboardViz));
+    showSuccess('Visualization added to dashboard.');
+    setTimeout(() => {
+        window.location.href = '/dashboard';
+    }, 900);
+}
+
+function setupFilters() {
+    document.getElementById('columnSearch').addEventListener('input', (event) => {
+        const query = event.target.value.toLowerCase();
+        document.querySelectorAll('.column-chip').forEach((chip) => {
+            chip.style.display = chip.dataset.column.includes(query) ? 'flex' : 'none';
+        });
+    });
+
+    document.querySelectorAll('input[name="column"]').forEach((checkbox) => {
+        checkbox.addEventListener('change', updateChipStates);
+    });
+
+    document.getElementById('selectAllColumns').addEventListener('click', () => {
+        document.querySelectorAll('input[name="column"]').forEach((checkbox) => checkbox.checked = true);
+        updateChipStates();
+    });
+
+    document.getElementById('clearColumns').addEventListener('click', () => {
+        document.querySelectorAll('input[name="column"]').forEach((checkbox) => checkbox.checked = false);
+        updateChipStates();
+    });
+
+    const slider = document.getElementById('percentageSlider');
+    const numberInput = document.getElementById('dataSamplePercentage');
+
+    slider.addEventListener('input', () => { numberInput.value = slider.value; });
+    numberInput.addEventListener('input', () => {
+        const value = Math.min(100, Math.max(10, parseInt(numberInput.value || '100', 10)));
+        numberInput.value = value;
+        slider.value = value;
+    });
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    setupFilters();
+    updateChipStates();
+
+    document.getElementById('generateChart').addEventListener('click', () => generateVisualization());
+    document.getElementById('addToDashboardBtn').addEventListener('click', addCurrentVisualizationToDashboard);
+    document.getElementById('refreshInsights').addEventListener('click', async () => {
+        try {
+            await loadAnalysisSummary();
+            showSuccess('Insights refreshed from the current dataset.');
+        } catch (error) {
+            showError(error.message);
+        }
+    });
+
+    try {
+        await loadAnalysisSummary();
+    } catch (error) {
+        showError(error.message);
+        document.getElementById('qualityAlerts').textContent = 'Unable to inspect the dataset.';
+        document.getElementById('keyInsights').textContent = 'Automatic insights are unavailable right now.';
+        document.getElementById('recommendedCharts').textContent = 'Chart recommendations could not be loaded.';
+        document.getElementById('columnProfiles').textContent = 'Column profiling could not be loaded.';
+    }
+});
+</script>
+{% endblock %}

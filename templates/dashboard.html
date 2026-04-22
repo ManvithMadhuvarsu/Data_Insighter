@@ -243,7 +243,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         block.innerHTML = `
                 <div class="viz-header">
-                <span>${viz.type} Chart</span>
+                <span>${viz.title || `${viz.type} Chart`}</span>
                 <span class="viz-remove">&times;</span>
                 </div>
             <div class="viz-content">

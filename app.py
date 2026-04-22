@@ -312,6 +312,22 @@ def analysis():
         flash(f'Error loading data file: {str(e)}', 'error')
         return redirect(url_for('index'))
 
+@app.route('/analysis_summary')
+@login_required
+def analysis_summary():
+    filepath = session.get('current_filepath')
+    if not filepath or not os.path.exists(filepath):
+        return error_response('No data file loaded. Please upload a file first.', 400)
+
+    try:
+        processor = DataProcessor(filepath)
+        return jsonify({
+            'success': True,
+            'summary': processor.get_analysis_summary()
+        })
+    except Exception as e:
+        return error_response(str(e), 400)
+
 @app.route('/dashboard')
 @login_required
 def dashboard():

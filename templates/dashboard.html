@@ -58,10 +58,15 @@
             <select id="globalFilterValue">
                 <option value="__all__">All values</option>
             </select>
+            <select id="dateFilterColumn">
+                <option value="">Date range column</option>
+            </select>
+            <input id="dateFilterStart" type="date">
+            <input id="dateFilterEnd" type="date">
             <button id="applyDashboardFilter" class="btn btn-outline">Apply Filter</button>
             <button id="clearDashboardFilter" class="btn btn-outline">Clear Filter</button>
         </div>
-        <p id="dashboardFilterStatus" class="library-empty">No global filter applied.</p>
+        <p id="dashboardFilterStatus" class="library-empty">No global filter applied. Click a chart segment to cross-filter the dashboard.</p>
     </div>
 
     <div id="dashboardArea" class="dashboard-area">
@@ -114,11 +119,12 @@
 
 .filter-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr auto auto;
+    grid-template-columns: repeat(5, minmax(140px, 1fr)) auto auto;
     gap: 12px;
 }
 
-.filter-grid select {
+.filter-grid select,
+.filter-grid input {
     padding: 10px 12px;
     border: 1px solid #d0d5dd;
     border-radius: 10px;
@@ -343,6 +349,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const dashboardNameInput = document.getElementById('dashboardName');
     const globalFilterColumn = document.getElementById('globalFilterColumn');
     const globalFilterValue = document.getElementById('globalFilterValue');
+    const dateFilterColumn = document.getElementById('dateFilterColumn');
+    const dateFilterStart = document.getElementById('dateFilterStart');
+    const dateFilterEnd = document.getElementById('dateFilterEnd');
     const dashboardFilterStatus = document.getElementById('dashboardFilterStatus');
     let dashboardFilterState = JSON.parse(localStorage.getItem('dashboardFilterState') || '{}');
     
@@ -354,11 +363,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function saveFilterState() {
         localStorage.setItem('dashboardFilterState', JSON.stringify(dashboardFilterState));
+        const parts = [];
         if (dashboardFilterState.column && dashboardFilterState.value && dashboardFilterState.value !== '__all__') {
-            dashboardFilterStatus.textContent = `Global filter applied: ${dashboardFilterState.column} = ${dashboardFilterState.value}`;
-        } else {
-            dashboardFilterStatus.textContent = 'No global filter applied.';
+            parts.push(`${dashboardFilterState.column} = ${dashboardFilterState.value}`);
         }
+        if (dashboardFilterState.date_column && (dashboardFilterState.start_date || dashboardFilterState.end_date)) {
+            parts.push(`${dashboardFilterState.date_column}: ${dashboardFilterState.start_date || 'start'} to ${dashboardFilterState.end_date || 'end'}`);
+        }
+
+        if (parts.length) {
+            dashboardFilterStatus.textContent = `Dashboard filter applied: ${parts.join(' / ')}`;
+        } else {
+            dashboardFilterStatus.textContent = 'No global filter applied. Click a chart segment to cross-filter the dashboard.';
+        }
+    }
+
+    function rerenderDashboardCharts() {
+        dashboardArea.querySelectorAll('.viz-block, .text-box').forEach(element => {
+            if (element.classList.contains('viz-block')) {
+                element.remove();
+            }
+        });
+        loadDashboard();
     }
 
     async function loadFilterOptions() {
@@ -370,7 +396,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             const options = data.options || {};
+            const dateColumns = data.date_columns || [];
             globalFilterColumn.innerHTML = '<option value="">Choose a dimension</option>' + Object.keys(options)
+                .map((column) => `<option value="${column}">${column}</option>`)
+                .join('');
+            dateFilterColumn.innerHTML = '<option value="">Date range column</option>' + dateColumns
                 .map((column) => `<option value="${column}">${column}</option>`)
                 .join('');
 
@@ -378,6 +408,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 globalFilterColumn.value = dashboardFilterState.column;
                 updateFilterValues(options);
                 globalFilterValue.value = dashboardFilterState.value || '__all__';
+            }
+            if (dashboardFilterState.date_column) {
+                dateFilterColumn.value = dashboardFilterState.date_column;
+                dateFilterStart.value = dashboardFilterState.start_date || '';
+                dateFilterEnd.value = dashboardFilterState.end_date || '';
             }
 
             globalFilterColumn.addEventListener('change', () => updateFilterValues(options));
@@ -430,6 +465,7 @@ document.addEventListener('DOMContentLoaded', function() {
             localStorage.setItem('dashboardViz', JSON.stringify(data.dashboard.dashboard_viz || []));
             dashboardFilterState = data.dashboard.dashboard_state || {};
             saveFilterState();
+            await loadFilterOptions();
             dashboardArea.querySelectorAll('.viz-block, .text-box').forEach(element => element.remove());
             loadDashboard();
             showSuccess('Saved dashboard loaded into the workspace.');
@@ -499,6 +535,26 @@ document.addEventListener('DOMContentLoaded', function() {
                     ...data.visualization.layout,
                     width: container.offsetWidth,
                     height: container.offsetHeight
+                });
+                container.on('plotly_click', (eventData) => {
+                    const point = eventData?.points?.[0];
+                    const clickedValue = point?.x ?? point?.label;
+                    const candidateColumn = viz.columns?.[0];
+                    if (!candidateColumn || clickedValue === undefined || clickedValue === null) {
+                        return;
+                    }
+                    dashboardFilterState = {
+                        ...dashboardFilterState,
+                        column: candidateColumn,
+                        value: String(clickedValue),
+                        source: 'chart_click',
+                    };
+                    globalFilterColumn.value = candidateColumn;
+                    globalFilterValue.innerHTML = `<option value="${String(clickedValue)}">${String(clickedValue)}</option>`;
+                    globalFilterValue.value = String(clickedValue);
+                    saveFilterState();
+                    rerenderDashboardCharts();
+                    showSuccess(`Cross-filtered dashboard by ${candidateColumn} = ${clickedValue}`);
                 });
             }
         } catch (error) {
@@ -1028,15 +1084,13 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('applyDashboardFilter').addEventListener('click', function() {
         dashboardFilterState = {
             column: globalFilterColumn.value,
-            value: globalFilterValue.value
+            value: globalFilterValue.value,
+            date_column: dateFilterColumn.value,
+            start_date: dateFilterStart.value,
+            end_date: dateFilterEnd.value
         };
         saveFilterState();
-        dashboardArea.querySelectorAll('.viz-block, .text-box').forEach(element => {
-            if (element.classList.contains('viz-block')) {
-                element.remove();
-            }
-        });
-        loadDashboard();
+        rerenderDashboardCharts();
         showSuccess('Dashboard filter applied.');
     });
 
@@ -1044,13 +1098,11 @@ document.addEventListener('DOMContentLoaded', function() {
         dashboardFilterState = {};
         globalFilterColumn.value = '';
         globalFilterValue.innerHTML = '<option value="__all__">All values</option>';
+        dateFilterColumn.value = '';
+        dateFilterStart.value = '';
+        dateFilterEnd.value = '';
         saveFilterState();
-        dashboardArea.querySelectorAll('.viz-block, .text-box').forEach(element => {
-            if (element.classList.contains('viz-block')) {
-                element.remove();
-            }
-        });
-        loadDashboard();
+        rerenderDashboardCharts();
         showSuccess('Dashboard filter cleared.');
     });
 

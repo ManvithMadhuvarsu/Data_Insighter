@@ -204,8 +204,7 @@ class VisualizationGenerator:
         sample_size = max(1, int(len(self.df) * (percentage / 100)))
         return self.df.sample(n=sample_size, random_state=42)
 
-    def _prepare_subset(self, columns: List[str], sample_percentage: int) -> pd.DataFrame:
-        df = self._sample_data(sample_percentage)
+    def _prepare_subset(self, df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
         df = df[columns].copy()
         df = df.dropna(how='all')
 
@@ -234,6 +233,17 @@ class VisualizationGenerator:
         if column and column in working.columns and value not in (None, '', '__all__'):
             working = working[working[column].astype(str) == str(value)]
 
+        date_column = filters.get('date_column')
+        if date_column and date_column in working.columns:
+            dates = pd.to_datetime(working[date_column], errors='coerce')
+            start_date = filters.get('start_date')
+            end_date = filters.get('end_date')
+            if start_date:
+                working = working[dates >= pd.to_datetime(start_date, errors='coerce')]
+                dates = pd.to_datetime(working[date_column], errors='coerce')
+            if end_date:
+                working = working[dates <= pd.to_datetime(end_date, errors='coerce')]
+
         return working
         
     def generate_visualization(self, columns: List[str], viz_type: str, sample_percentage: int = 100, filters: Dict[str, Any] | None = None) -> Dict:
@@ -250,8 +260,9 @@ class VisualizationGenerator:
             if missing_cols:
                 raise ValueError(f"Columns not found: {', '.join(missing_cols)}")
             
-            df = self._prepare_subset(columns, sample_percentage)
+            df = self._sample_data(sample_percentage)
             df = self._apply_filters(df, filters)
+            df = self._prepare_subset(df, columns)
             if df.empty:
                 raise ValueError("The selected columns do not contain enough usable values to visualize")
             

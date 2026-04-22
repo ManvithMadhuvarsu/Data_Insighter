@@ -958,7 +958,13 @@ def dashboard_filter_options():
             values = [str(value) for value in df[column].dropna().astype(str).value_counts().head(15).index.tolist()]
             options[column] = values
 
-        return jsonify({'success': True, 'options': options})
+        date_columns = [
+            profile['name']
+            for profile in semantic_profiles
+            if profile.get('semantic_role') == 'datetime'
+        ]
+
+        return jsonify({'success': True, 'options': options, 'date_columns': date_columns})
     except Exception as e:
         return error_response(str(e), 400)
 

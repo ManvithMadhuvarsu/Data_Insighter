@@ -8,6 +8,22 @@
 
 {% block content %}
 <div class="upload-container">
+    {% if recent_datasets %}
+    <div class="recent-datasets-banner">
+        <div>
+            <h2>Recent Workspace Datasets</h2>
+            <p>Reopen a previous dataset if you want to continue profiling or build a new dashboard from it.</p>
+        </div>
+        <div class="recent-dataset-list">
+            {% for dataset in recent_datasets %}
+            <a class="recent-dataset-pill" href="{{ url_for('activate_dataset', dataset_id=dataset.id) }}">
+                {{ dataset.metadata.display_name if dataset.metadata.display_name else dataset.source_name }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <div class="upload-content-grid">
         <!-- Upload Area -->
         <div class="card">
@@ -91,6 +107,32 @@
     max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
+}
+
+.recent-datasets-banner {
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+.recent-dataset-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.recent-dataset-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 14px;
+    border-radius: 999px;
+    background: #fff7ed;
+    color: #9a3412;
+    text-decoration: none;
+    font-weight: 600;
 }
 
 .upload-title {

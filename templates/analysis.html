@@ -14,6 +14,15 @@
             <p class="eyebrow">Analyst Workspace</p>
             <h1>Dataset-driven insights</h1>
             <p class="subcopy">Review data quality, spot important signals, and build charts that are grounded in what your uploaded dataset is actually saying.</p>
+            {% if dataset_record %}
+            <p class="dataset-context">
+                Active dataset:
+                <strong>{{ dataset_record.metadata.display_name if dataset_record.metadata.display_name else dataset_record.source_name }}</strong>
+                · {{ dataset_record.row_count }} rows
+                · {{ dataset_record.column_count }} columns
+                · {{ dataset_record.source_type|title }}
+            </p>
+            {% endif %}
         </div>
         <div class="header-actions">
             <button id="refreshInsights" class="btn btn-secondary">Refresh Insights</button>
@@ -183,6 +192,11 @@
 .panel-note {
     color: #667085;
     max-width: 760px;
+}
+
+.dataset-context {
+    margin-top: 12px;
+    color: #475467;
 }
 
 .header-actions {

@@ -13,6 +13,12 @@ import time
 import secrets
 from file_utils import read_data_file
 from dotenv import load_dotenv
+from workspace_store import (
+    create_dataset_record,
+    ensure_workspace_dirs,
+    get_dataset_record,
+    list_dataset_records,
+)
 
 # Load environment variables from .env file
 load_dotenv()
@@ -31,6 +37,7 @@ os.makedirs(app.config['SAMPLE_DATASETS'], exist_ok=True)
 os.makedirs(os.path.join('static', 'css'), exist_ok=True)
 os.makedirs(os.path.join('static', 'js'), exist_ok=True)
 os.makedirs(os.path.join('static', 'images'), exist_ok=True)
+ensure_workspace_dirs()
 
 # ---------- User store helpers (FIX #2 + #3) ----------
 USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
@@ -165,7 +172,16 @@ def index():
     
     sample_datasets = [f for f in os.listdir(app.config['SAMPLE_DATASETS']) 
                       if allowed_file(f)]
-    return render_template('index.html', sample_datasets=sample_datasets)
+    recent_datasets = list_dataset_records(session['user'])[:6]
+    current_dataset = None
+    if session.get('current_dataset_id'):
+        current_dataset = get_dataset_record(session['user'], session['current_dataset_id'])
+    return render_template(
+        'index.html',
+        sample_datasets=sample_datasets,
+        recent_datasets=recent_datasets,
+        current_dataset=current_dataset,
+    )
 
 @app.route('/upload', methods=['GET', 'POST'])
 @login_required
@@ -202,6 +218,19 @@ def upload():
                 
                 # Read the file
                 df = read_data_file(filepath)
+                dataset_record = create_dataset_record(
+                    session['user'],
+                    source_name=file.filename,
+                    stored_path=filepath,
+                    source_type='upload',
+                    row_count=len(df),
+                    column_count=len(df.columns),
+                    metadata={
+                        'display_name': file.filename,
+                        'columns': df.columns.tolist(),
+                    },
+                )
+                session['current_dataset_id'] = dataset_record['id']
                 
                 # Prepare preview data
                 preview_data = []
@@ -263,7 +292,8 @@ def upload():
     # Get list of sample datasets for the template
     sample_datasets = [f for f in os.listdir(app.config['SAMPLE_DATASETS']) 
                       if allowed_file(f)]
-    return render_template('upload.html', sample_datasets=sample_datasets)
+    recent_datasets = list_dataset_records(session['user'])[:6]
+    return render_template('upload.html', sample_datasets=sample_datasets, recent_datasets=recent_datasets)
 
 @app.route('/sample/<filename>')
 @login_required
@@ -278,6 +308,19 @@ def use_sample(filename):
             df = read_data_file(filepath)
             # FIX #5: Store filepath only in server session, never send to client
             session['current_filepath'] = filepath
+            dataset_record = create_dataset_record(
+                session['user'],
+                source_name=filename,
+                stored_path=filepath,
+                source_type='sample',
+                row_count=len(df),
+                column_count=len(df.columns),
+                metadata={
+                    'display_name': filename,
+                    'columns': df.columns.tolist(),
+                },
+            )
+            session['current_dataset_id'] = dataset_record['id']
             
             data_info = {
                 'columns': df.columns.tolist(),
@@ -307,7 +350,10 @@ def analysis():
     try:
         df = read_data_file(filepath)
         columns = df.columns.tolist()
-        return render_template('analysis.html', columns=columns)
+        dataset_record = None
+        if session.get('current_dataset_id'):
+            dataset_record = get_dataset_record(session['user'], session['current_dataset_id'])
+        return render_template('analysis.html', columns=columns, dataset_record=dataset_record)
     except Exception as e:
         flash(f'Error loading data file: {str(e)}', 'error')
         return redirect(url_for('index'))
@@ -321,12 +367,33 @@ def analysis_summary():
 
     try:
         processor = DataProcessor(filepath)
+        dataset_record = None
+        if session.get('current_dataset_id'):
+            dataset_record = get_dataset_record(session['user'], session['current_dataset_id'])
         return jsonify({
             'success': True,
-            'summary': processor.get_analysis_summary()
+            'summary': processor.get_analysis_summary(),
+            'dataset': dataset_record,
         })
     except Exception as e:
         return error_response(str(e), 400)
+
+@app.route('/datasets/<dataset_id>/activate')
+@login_required
+def activate_dataset(dataset_id):
+    dataset_record = get_dataset_record(session['user'], dataset_id)
+    if not dataset_record:
+        flash('Dataset not found in your workspace.', 'error')
+        return redirect(url_for('index'))
+
+    if not os.path.exists(dataset_record['stored_path']):
+        flash('The underlying dataset file is no longer available.', 'error')
+        return redirect(url_for('index'))
+
+    session['current_dataset_id'] = dataset_record['id']
+    session['current_filepath'] = dataset_record['stored_path']
+    flash(f"Loaded dataset: {dataset_record.get('metadata', {}).get('display_name', dataset_record['source_name'])}", 'success')
+    return redirect(url_for('analysis'))
 
 @app.route('/dashboard')
 @login_required

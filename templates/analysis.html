@@ -204,6 +204,68 @@
             <div class="panel">
                 <div class="panel-header">
                     <div>
+                        <p class="eyebrow">Business Metrics</p>
+                        <h2>Reusable calculated measures</h2>
+                    </div>
+                </div>
+                <div class="builder-grid">
+                    <div class="control-group">
+                        <label for="measureName">Measure name</label>
+                        <input id="measureName" type="text" placeholder="Gross margin %, conversion rate...">
+                    </div>
+                    <div class="control-group">
+                        <label for="measureType">Formula type</label>
+                        <select id="measureType">
+                            <option value="ratio">Ratio</option>
+                            <option value="margin">Profit / margin %</option>
+                            <option value="conversion_rate">Conversion rate %</option>
+                            <option value="growth_pct">Growth %</option>
+                            <option value="rolling_average">Rolling average</option>
+                            <option value="period_change">MoM / QoQ / YoY %</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="measurePrimaryColumn">Primary metric</label>
+                        <select id="measurePrimaryColumn">
+                            <option value="">Choose a column</option>
+                            {% for column in columns %}
+                            <option value="{{ column }}">{{ column }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="measureSecondaryColumn">Secondary metric</label>
+                        <select id="measureSecondaryColumn">
+                            <option value="">Choose a column</option>
+                            {% for column in columns %}
+                            <option value="{{ column }}">{{ column }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="measureDateColumn">Date column</label>
+                        <select id="measureDateColumn">
+                            <option value="">Optional date column</option>
+                            {% for column in columns %}
+                            <option value="{{ column }}">{{ column }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="measureWindow">Window / period</label>
+                        <input id="measureWindow" type="text" value="7" placeholder="7, M, Q, or Y">
+                    </div>
+                </div>
+                <div class="builder-actions">
+                    <button id="createMeasure" class="btn btn-primary">Create Measure</button>
+                    <button id="refreshMeasures" class="btn btn-outline">Refresh Measures</button>
+                </div>
+                <div id="measureResults" class="recommendation-grid loading-text">Saved measures will appear here with reproducible definitions.</div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
                         <p class="eyebrow">Recommended</p>
                         <h2>Suggested visuals</h2>
                     </div>
@@ -1010,6 +1072,82 @@ async function createJoinedDataset(relationship) {
     window.location.href = '/analysis';
 }
 
+function buildMeasureDefinition() {
+    const type = document.getElementById('measureType').value;
+    const primary = document.getElementById('measurePrimaryColumn').value;
+    const secondary = document.getElementById('measureSecondaryColumn').value;
+    const dateColumn = document.getElementById('measureDateColumn').value;
+    const windowValue = document.getElementById('measureWindow').value;
+
+    if (type === 'ratio') {
+        return { type, numerator: primary, denominator: secondary };
+    }
+    if (type === 'margin') {
+        return { type, revenue: primary, cost: secondary };
+    }
+    if (type === 'conversion_rate') {
+        return { type, converted: primary, total: secondary };
+    }
+    if (type === 'growth_pct') {
+        return { type, metric: primary, date_column: dateColumn };
+    }
+    if (type === 'rolling_average') {
+        return { type, metric: primary, date_column: dateColumn, window: windowValue };
+    }
+    return { type, metric: primary, date_column: dateColumn, grain: (windowValue || 'M').toUpperCase() };
+}
+
+function renderMeasures(measures) {
+    const container = document.getElementById('measureResults');
+    if (!measures.length) {
+        container.innerHTML = '<div class="recommendation-card"><div class="card-detail">No named measures saved yet. Create reusable definitions for growth, ratios, margin, conversion rate, and rolling averages.</div></div>';
+        return;
+    }
+    container.innerHTML = measures.map((measure) => {
+        const result = measure.latest_result || {};
+        const definition = measure.definition || {};
+        return `
+            <div class="recommendation-card">
+                <div>
+                    <div class="card-title">${measure.name}</div>
+                    <div class="summary-value">${result.value ?? 'n/a'}</div>
+                </div>
+                <div class="card-detail">${result.explanation || 'Saved named metric definition.'}</div>
+                <span class="card-stat">${definition.type || 'measure'}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+async function loadMeasures() {
+    const response = await fetch('/measures');
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to load measures');
+    }
+    renderMeasures(data.measures || []);
+}
+
+async function createMeasure() {
+    const name = document.getElementById('measureName').value.trim();
+    const response = await fetch('/measures/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
+            name,
+            definition: buildMeasureDefinition(),
+        })
+    });
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to create measure');
+    }
+    showSuccess(`Created measure: ${data.measure.name}`);
+    document.getElementById('measureName').value = '';
+    await loadMeasures();
+}
+
 async function loadExecutiveReport() {
     const response = await fetch('/executive_report');
     const data = await response.json();
@@ -1309,11 +1447,26 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('relationshipSuggestions').textContent = 'Data model scan failed.';
         }
     });
+    document.getElementById('createMeasure').addEventListener('click', async () => {
+        try {
+            await createMeasure();
+        } catch (error) {
+            showError(error.message);
+        }
+    });
+    document.getElementById('refreshMeasures').addEventListener('click', async () => {
+        try {
+            await loadMeasures();
+        } catch (error) {
+            showError(error.message);
+        }
+    });
 
     try {
         await loadAnalysisSummary();
         await loadExecutiveReport();
         await loadDataModel();
+        await loadMeasures();
     } catch (error) {
         showError(error.message);
         document.getElementById('qualityAlerts').textContent = 'Unable to inspect the dataset.';
@@ -1324,6 +1477,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('executiveTakeaways').textContent = 'Executive takeaways could not be generated.';
         document.getElementById('reportPreview').textContent = 'Report preview could not be generated.';
         document.getElementById('lineageSteps').textContent = 'Lineage history could not be loaded.';
+        document.getElementById('measureResults').textContent = 'Saved measures could not be loaded.';
     }
 });
 </script>

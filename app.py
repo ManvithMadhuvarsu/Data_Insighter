@@ -16,17 +16,20 @@ from dotenv import load_dotenv
 from workspace_store import (
     create_dashboard_record,
     create_dataset_record,
+    create_measure_record,
     create_relationship_record,
     ensure_workspace_dirs,
     get_dashboard_record,
     get_dataset_record,
     list_dashboard_records,
     list_dataset_records,
+    list_measure_records,
     list_relationship_records,
 )
 from transform_service import apply_transform
 from report_service import build_report_payload
 from data_model_service import join_datasets, suggest_relationships
+from measure_service import evaluate_measure
 
 # Load environment variables from .env file
 load_dotenv()
@@ -630,6 +633,45 @@ def create_joined_dataset():
             'summary': processor.get_analysis_summary(),
             'message': f'Created joined dataset with {len(joined_df)} rows and {len(joined_df.columns)} columns.',
         })
+    except Exception as e:
+        return error_response(str(e), 400)
+
+@app.route('/measures')
+@login_required
+def measures():
+    records = list_measure_records(session['user'], dataset_id=session.get('current_dataset_id'))
+    return jsonify({'success': True, 'measures': records})
+
+@app.route('/measures/create', methods=['POST'])
+@login_required
+def create_measure():
+    if not validate_csrf_token():
+        return error_response('Invalid request token', 400)
+
+    filepath = session.get('current_filepath')
+    if not filepath or not os.path.exists(filepath):
+        return error_response('No active dataset found. Load a dataset first.', 400)
+
+    payload = request.get_json(silent=True) or {}
+    name = (payload.get('name') or '').strip()
+    definition = payload.get('definition') or {}
+    if not name:
+        return error_response('Give the measure a business name.', 400)
+    if not definition.get('type'):
+        return error_response('Choose a measure formula type.', 400)
+
+    try:
+        df = read_data_file(filepath)
+        definition['name'] = name
+        result = evaluate_measure(df, definition)
+        record = create_measure_record(
+            session['user'],
+            dataset_id=session.get('current_dataset_id'),
+            name=name,
+            definition=definition,
+            latest_result=result,
+        )
+        return jsonify({'success': True, 'measure': record, 'result': result})
     except Exception as e:
         return error_response(str(e), 400)
 

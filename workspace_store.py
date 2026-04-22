@@ -10,12 +10,14 @@ BASE_DIR = os.path.join(os.path.dirname(__file__), 'workspace_data')
 DATASETS_DIR = os.path.join(BASE_DIR, 'datasets')
 DASHBOARDS_DIR = os.path.join(BASE_DIR, 'dashboards')
 RELATIONSHIPS_DIR = os.path.join(BASE_DIR, 'relationships')
+MEASURES_DIR = os.path.join(BASE_DIR, 'measures')
 
 
 def ensure_workspace_dirs() -> None:
     os.makedirs(DATASETS_DIR, exist_ok=True)
     os.makedirs(DASHBOARDS_DIR, exist_ok=True)
     os.makedirs(RELATIONSHIPS_DIR, exist_ok=True)
+    os.makedirs(MEASURES_DIR, exist_ok=True)
 
 
 def _safe_user_segment(username: str) -> str:
@@ -65,6 +67,23 @@ def _relationship_path(username: str, relationship_id: str) -> str:
 
 def _list_user_relationship_files(username: str) -> List[str]:
     user_dir = os.path.join(RELATIONSHIPS_DIR, _safe_user_segment(username))
+    if not os.path.exists(user_dir):
+        return []
+    return [
+        os.path.join(user_dir, filename)
+        for filename in os.listdir(user_dir)
+        if filename.endswith('.json')
+    ]
+
+
+def _measure_path(username: str, measure_id: str) -> str:
+    user_dir = os.path.join(MEASURES_DIR, _safe_user_segment(username))
+    os.makedirs(user_dir, exist_ok=True)
+    return os.path.join(user_dir, f'{measure_id}.json')
+
+
+def _list_user_measure_files(username: str) -> List[str]:
+    user_dir = os.path.join(MEASURES_DIR, _safe_user_segment(username))
     if not os.path.exists(user_dir):
         return []
     return [
@@ -225,6 +244,45 @@ def list_relationship_records(username: str) -> List[Dict[str, Any]]:
         record = _read_json(path)
         if record:
             records.append(record)
+
+    records.sort(key=lambda item: item.get('updated_at', ''), reverse=True)
+    return records
+
+
+def create_measure_record(
+    username: str,
+    dataset_id: Optional[str],
+    name: str,
+    definition: Dict[str, Any],
+    latest_result: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    ensure_workspace_dirs()
+    measure_id = f"msr_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{secrets.token_hex(4)}"
+    now = datetime.utcnow().isoformat() + 'Z'
+    record = {
+        'id': measure_id,
+        'dataset_id': dataset_id,
+        'name': name,
+        'definition': definition,
+        'latest_result': latest_result or {},
+        'created_at': now,
+        'updated_at': now,
+    }
+    with open(_measure_path(username, measure_id), 'w', encoding='utf-8') as handle:
+        json.dump(record, handle, indent=2)
+    return record
+
+
+def list_measure_records(username: str, dataset_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    ensure_workspace_dirs()
+    records = []
+    for path in _list_user_measure_files(username):
+        record = _read_json(path)
+        if not record:
+            continue
+        if dataset_id and record.get('dataset_id') != dataset_id:
+            continue
+        records.append(record)
 
     records.sort(key=lambda item: item.get('updated_at', ''), reverse=True)
     return records

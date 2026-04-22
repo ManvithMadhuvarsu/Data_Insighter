@@ -154,24 +154,9 @@
             showNotification(message, 'info');
         }
 
-        // Store a flag in sessionStorage to track if we're in a redirect loop
-        function handlePageRefresh() {
-            // Check if this is an actual refresh vs a redirect
-            const navEntry = performance.getEntriesByType('navigation')[0];
-            const isRefresh = navEntry && navEntry.type === 'reload';
-            const isBackForward = navEntry && (navEntry.type === 'back_forward');
-            
-            // Only clear session on actual user refresh, not redirects
-            if (isRefresh && !sessionStorage.getItem('redirecting')) {
-                sessionStorage.setItem('redirecting', 'true');
-                clearSessionAndRedirect();
-            } else if (!isRefresh && !isBackForward) {
-                // Reset the flag if this is a normal navigation
-                sessionStorage.removeItem('redirecting');
-            }
-        }
-
-        // Function to clear session and redirect
+        // Function to clear file state only when an explicit UI action needs it.
+        // Automatic refresh-based clearing breaks analysis workflows that reload
+        // after applying transforms, creating joined datasets, or saving state.
         function clearSessionAndRedirect() {
             fetch('/clear_session', {
                 method: 'POST',
@@ -197,9 +182,6 @@
                 sessionStorage.removeItem('redirecting');
             });
         }
-
-        // Execute refresh check
-        handlePageRefresh();
 
         // Navigation Toggle
         document.querySelector('.nav-toggle')?.addEventListener('click', () => {

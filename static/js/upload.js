@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectAllBtn = document.getElementById('selectAll');
     const deselectAllBtn = document.getElementById('deselectAll');
     const proceedButton = document.getElementById('proceedButton');
+    const csrfToken = window.getCsrfToken ? window.getCsrfToken() : '';
 
     // Handle drag and drop events
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -63,6 +64,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function uploadFile(file) {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('_csrf_token', csrfToken);
 
         loadingIndicator.style.display = 'block';
         dataPreview.style.display = 'none';
@@ -160,46 +162,15 @@ document.addEventListener('DOMContentLoaded', function() {
             columnList.appendChild(div);
         });
 
-        // Enable proceed button
-        proceedButton.disabled = false;
-
-        // Add event listeners for column selection
         setupColumnSelection();
+        updateProceedButton();
     }
 
     function setupColumnSelection() {
-        // Column search functionality
-        columnSearch.addEventListener('input', (e) => {
-            const searchTerm = e.target.value.toLowerCase();
-            document.querySelectorAll('.column-item').forEach(item => {
-                const text = item.textContent.toLowerCase();
-                item.style.display = text.includes(searchTerm) ? 'block' : 'none';
-            });
-        });
-
-        // Select all functionality
-        selectAllBtn.addEventListener('click', () => {
-            document.querySelectorAll('.column-item input[type="checkbox"]').forEach(checkbox => {
-                checkbox.checked = true;
-            });
-            updateProceedButton();
-        });
-
-        // Deselect all functionality
-        deselectAllBtn.addEventListener('click', () => {
-            document.querySelectorAll('.column-item input[type="checkbox"]').forEach(checkbox => {
-                checkbox.checked = false;
-            });
-            updateProceedButton();
-        });
-
         // Individual checkbox change events
         document.querySelectorAll('.column-item input[type="checkbox"]').forEach(checkbox => {
             checkbox.addEventListener('change', updateProceedButton);
         });
-
-        // Initial button state
-        updateProceedButton();
     }
 
     function updateProceedButton() {
@@ -223,7 +194,7 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             const filename = e.currentTarget.dataset.filename;
             try {
-                const response = await fetch(`/sample/${filename}`);
+                const response = await fetch(`/sample/${encodeURIComponent(filename)}`);
                 const data = await response.json();
                 if (data.success) {
                     showSuccess('Sample dataset loaded successfully');
@@ -237,5 +208,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 showError('Error loading sample dataset');
             }
         });
+    });
+
+    columnSearch.addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase();
+        document.querySelectorAll('.column-item').forEach(item => {
+            const text = item.textContent.toLowerCase();
+            item.style.display = text.includes(searchTerm) ? 'block' : 'none';
+        });
+    });
+
+    selectAllBtn.addEventListener('click', () => {
+        document.querySelectorAll('.column-item input[type="checkbox"]').forEach(checkbox => {
+            checkbox.checked = true;
+        });
+        updateProceedButton();
+    });
+
+    deselectAllBtn.addEventListener('click', () => {
+        document.querySelectorAll('.column-item input[type="checkbox"]').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        updateProceedButton();
     });
 }); 

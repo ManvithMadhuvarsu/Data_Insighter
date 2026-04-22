@@ -4,6 +4,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 import pandas as pd
 import json
+from functools import wraps
 from data_processor import DataProcessor
 from visualization_generator import VisualizationGenerator
 import numpy as np
@@ -37,23 +38,21 @@ USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
 def _load_users():
     """Load users from JSON file."""
     if os.path.exists(USERS_FILE):
-        with open(USERS_FILE, 'r') as f:
-            return json.load(f)
+        try:
+            with open(USERS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return {}
     return {}
 
 def _save_users(users):
     """Save users to JSON file."""
-    with open(USERS_FILE, 'w') as f:
+    with open(USERS_FILE, 'w', encoding='utf-8') as f:
         json.dump(users, f, indent=2)
 
-# Seed a default admin if no users exist yet
+# Start with an empty user store; accounts should be created through registration.
 if not os.path.exists(USERS_FILE):
-    _save_users({
-        'admin': {
-            'email': 'admin@datainsighter.com',
-            'password_hash': generate_password_hash('password')
-        }
-    })
+    _save_users({})
 
 # ---------- CSRF helpers (FIX #4) ----------
 def generate_csrf_token():
@@ -64,7 +63,8 @@ def generate_csrf_token():
 
 def validate_csrf_token():
     """Validate the CSRF token from form data or JSON against the session."""
-    token = request.form.get('_csrf_token') or (request.json or {}).get('_csrf_token', '')
+    payload = request.get_json(silent=True) or {}
+    token = request.form.get('_csrf_token') or payload.get('_csrf_token', '')
     if not token or token != session.get('_csrf_token'):
         return False
     return True
@@ -74,6 +74,40 @@ app.jinja_env.globals['csrf_token'] = generate_csrf_token
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'csv', 'json'}
+
+def error_response(message, status_code):
+    return jsonify({'success': False, 'error': message}), status_code
+
+def is_path_within_directory(directory, target_path):
+    """Ensure target_path resolves inside directory."""
+    try:
+        base_dir = os.path.abspath(directory)
+        target = os.path.abspath(target_path)
+        return os.path.commonpath([base_dir, target]) == base_dir
+    except ValueError:
+        return False
+
+def cleanup_uploaded_file(filepath):
+    """Delete files only when they are inside the uploads directory."""
+    if filepath and os.path.exists(filepath) and is_path_within_directory(app.config['UPLOAD_FOLDER'], filepath):
+        try:
+            os.remove(filepath)
+        except OSError:
+            pass
+
+def login_required(view):
+    """Require an authenticated session for app pages and APIs."""
+    @wraps(view)
+    def wrapped_view(*args, **kwargs):
+        if session.get('user'):
+            return view(*args, **kwargs)
+
+        if request.is_json or request.method != 'GET':
+            return error_response('Authentication required', 401)
+
+        flash('Please log in to continue.', 'error')
+        return redirect(url_for('login'))
+    return wrapped_view
 
 def flatten_json_data(data):
     """Recursively flatten nested JSON structures"""
@@ -122,18 +156,11 @@ class NumpyEncoder(json.JSONEncoder):
         return super().default(obj)
 
 @app.route('/')
+@login_required
 def index():
-    if 'user' not in session:
-        return redirect(url_for('login'))
     # FIX #6: Only clear file-related keys, NEVER clear user/login state
     if 'current_filepath' in session:
-        filepath = session.get('current_filepath')
-        if filepath and os.path.exists(filepath):
-            if app.config['UPLOAD_FOLDER'] in filepath:
-                try:
-                    os.remove(filepath)
-                except:
-                    pass
+        cleanup_uploaded_file(session.get('current_filepath'))
         session.pop('current_filepath', None)
     
     sample_datasets = [f for f in os.listdir(app.config['SAMPLE_DATASETS']) 
@@ -141,31 +168,31 @@ def index():
     return render_template('index.html', sample_datasets=sample_datasets)
 
 @app.route('/upload', methods=['GET', 'POST'])
+@login_required
 def upload():
     if request.method == 'POST':
+        if not validate_csrf_token():
+            return error_response('Invalid form submission. Please refresh and try again.', 400)
+
         if 'file' not in request.files:
-            return jsonify({'success': False, 'error': 'No file part'}), 400
+            return error_response('No file part', 400)
         
         file = request.files['file']
         if file.filename == '':
-            return jsonify({'success': False, 'error': 'No selected file'}), 400
+            return error_response('No selected file', 400)
         
         if file and allowed_file(file.filename):
+            filepath = None
             try:
                 # Clear any existing uploaded file
                 if 'current_filepath' in session:
-                    old_filepath = session.get('current_filepath')
-                    if old_filepath and os.path.exists(old_filepath):
-                        if app.config['UPLOAD_FOLDER'] in old_filepath:
-                            try:
-                                os.remove(old_filepath)
-                            except:
-                                pass
+                    cleanup_uploaded_file(session.get('current_filepath'))
                 
                 # Create a safe filename
-                filename = secure_filename(file.filename)
-                if not filename:
-                    filename = f"upload_{int(time.time())}.{file.filename.rsplit('.', 1)[1].lower()}"
+                original_name = secure_filename(file.filename)
+                extension = file.filename.rsplit('.', 1)[1].lower()
+                basename = os.path.splitext(original_name)[0] or 'upload'
+                filename = f"{basename}_{int(time.time())}_{secrets.token_hex(4)}.{extension}"
                 
                 filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                 file.save(filepath)
@@ -228,12 +255,10 @@ def upload():
                 
             except Exception as e:
                 # Clean up the file if there was an error
-                if os.path.exists(filepath):
-                    os.remove(filepath)
-                return jsonify({
-                    'success': False,
-                    'error': str(e)
-                }), 400
+                cleanup_uploaded_file(filepath)
+                return error_response(str(e), 400)
+
+        return error_response('Unsupported file format. Please upload a CSV or JSON file.', 400)
     
     # Get list of sample datasets for the template
     sample_datasets = [f for f in os.listdir(app.config['SAMPLE_DATASETS']) 
@@ -241,13 +266,12 @@ def upload():
     return render_template('upload.html', sample_datasets=sample_datasets)
 
 @app.route('/sample/<filename>')
+@login_required
 def use_sample(filename):
     filepath = os.path.join(app.config['SAMPLE_DATASETS'], secure_filename(filename))
     # FIX #5: Validate the path stays inside SAMPLE_DATASETS directory
-    abs_sample_dir = os.path.abspath(app.config['SAMPLE_DATASETS'])
-    abs_filepath = os.path.abspath(filepath)
-    if not abs_filepath.startswith(abs_sample_dir):
-        return jsonify({'error': 'Invalid file path'}), 400
+    if not is_path_within_directory(app.config['SAMPLE_DATASETS'], filepath):
+        return error_response('Invalid file path', 400)
     
     if os.path.exists(filepath) and allowed_file(filename):
         try:
@@ -269,10 +293,11 @@ def use_sample(filename):
                 'data': data_info
             })
         except Exception as e:
-            return jsonify({'error': str(e)}), 400
-    return jsonify({'error': 'Sample dataset not found'}), 404
+            return error_response(str(e), 400)
+    return error_response('Sample dataset not found', 404)
 
 @app.route('/analysis')
+@login_required
 def analysis():
     # FIX #5: Never read filepath from query params — use session only
     filepath = session.get('current_filepath')
@@ -288,6 +313,7 @@ def analysis():
         return redirect(url_for('index'))
 
 @app.route('/dashboard')
+@login_required
 def dashboard():
     if not session.get('current_filepath'):
         flash('Please upload a file or select a sample dataset first', 'error')
@@ -295,8 +321,12 @@ def dashboard():
     return render_template('dashboard.html')
 
 @app.route('/generate_visualization', methods=['POST'])
+@login_required
 def generate_visualization():
     try:
+        if not validate_csrf_token():
+            return error_response('Invalid request token', 400)
+
         data = request.json
         # FIX #5: Never accept filepath from client — always use session
         filepath = session.get('current_filepath')
@@ -305,28 +335,16 @@ def generate_visualization():
         sample_percentage = data.get('sample_percentage', 100)
         
         if not filepath:
-            return jsonify({
-                'success': False,
-                'error': 'No data file loaded. Please upload a file first.'
-            }), 400
+            return error_response('No data file loaded. Please upload a file first.', 400)
             
         if not columns:
-            return jsonify({
-                'success': False,
-                'error': 'No columns selected'
-            }), 400
+            return error_response('No columns selected', 400)
             
         if not viz_type:
-            return jsonify({
-                'success': False,
-                'error': 'No visualization type selected'
-            }), 400
+            return error_response('No visualization type selected', 400)
         
         if not os.path.exists(filepath):
-            return jsonify({
-                'success': False,
-                'error': 'Data file not found. Please upload again.'
-            }), 400
+            return error_response('Data file not found. Please upload again.', 400)
         
         viz_generator = VisualizationGenerator(filepath)
         visualization = viz_generator.generate_visualization(
@@ -344,23 +362,21 @@ def generate_visualization():
         import traceback
         print(f"Error in generate_visualization: {str(e)}")
         print(traceback.format_exc())
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 400
+        return error_response(str(e), 400)
 
 @app.route('/export', methods=['POST'])
+@login_required
 def export_visualization():
     try:
+        if not validate_csrf_token():
+            return error_response('Invalid request token', 400)
+
         data = request.json
         viz_type = data.get('type')
         viz_data = data.get('data')
         
         if not viz_type or not viz_data:
-            return jsonify({
-                'success': False,
-                'error': 'Missing required parameters'
-            }), 400
+            return error_response('Missing required parameters', 400)
         
         viz_generator = VisualizationGenerator(None)
         export_file = viz_generator.export_visualization(viz_type, viz_data)
@@ -371,22 +387,20 @@ def export_visualization():
             download_name=f'visualization.{viz_type}'
         )
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 400
+        return error_response(str(e), 400)
 
 @app.route('/export_dashboard', methods=['POST'])
+@login_required
 def export_dashboard():
     try:
+        if not validate_csrf_token():
+            return error_response('Invalid request token', 400)
+
         data = request.json
         dashboard_data = data.get('dashboard_data')
         
         if not dashboard_data:
-            return jsonify({
-                'success': False,
-                'error': 'Missing dashboard data'
-            }), 400
+            return error_response('Missing dashboard data', 400)
         
         # Read the template
         with open('templates/saving_dashboard.html', 'r', encoding='utf-8') as f:
@@ -413,30 +427,28 @@ def export_dashboard():
         )
         
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 400
+        return error_response(str(e), 400)
 
 @app.route('/clear_session', methods=['POST'])
+@login_required
 def clear_session():
     try:
+        if not validate_csrf_token():
+            return error_response('Invalid request token', 400)
+
         # Get the current filepath from session
         current_filepath = session.get('current_filepath')
         
         # If there's a file and it's in the uploads directory, delete it
-        if current_filepath and os.path.exists(current_filepath):
-            if app.config['UPLOAD_FOLDER'] in current_filepath:
-                try:
-                    os.remove(current_filepath)
-                except Exception as e:
-                    print(f"Error removing file: {str(e)}")
+        cleanup_uploaded_file(current_filepath)
 
         # Clear all files in the uploads directory that are older than 1 hour
         current_time = time.time()
         for filename in os.listdir(app.config['UPLOAD_FOLDER']):
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             try:
+                if not is_path_within_directory(app.config['UPLOAD_FOLDER'], filepath):
+                    continue
                 if os.path.getctime(filepath) < (current_time - 3600):  # 3600 seconds = 1 hour
                     os.remove(filepath)
             except Exception as e:
@@ -447,7 +459,7 @@ def clear_session():
         
         return jsonify({'success': True, 'message': 'Session cleared successfully'})
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -504,10 +516,22 @@ def login():
         
         # FIX #2: Authenticate against stored users with hashed passwords
         users = _load_users()
+        matched_username = username
         user = users.get(username)
+        if user is None:
+            matched = next(
+                (
+                    (stored_username, details)
+                    for stored_username, details in users.items()
+                    if details.get('email', '').lower() == username.lower()
+                ),
+                None
+            )
+            if matched:
+                matched_username, user = matched
         
         if user and check_password_hash(user['password_hash'], password):
-            session['user'] = username
+            session['user'] = matched_username
             return redirect(url_for('index'))
         else:
             flash('Invalid username or password', 'error')
@@ -515,6 +539,7 @@ def login():
     return render_template('login.html')
 
 @app.route('/logout')
+@login_required
 def logout():
     """Proper logout route."""
     session.clear()

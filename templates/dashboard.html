@@ -277,6 +277,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
+                    _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
                     columns: viz.columns,
                     type: viz.type,
                     sample_percentage: viz.samplePercentage
@@ -431,7 +432,7 @@ document.addEventListener('DOMContentLoaded', function() {
     clearDashboardBtn.addEventListener('click', () => {
     if (confirm('Are you sure you want to clear the dashboard?')) {
         localStorage.removeItem('dashboardViz');
-            dashboardArea.innerHTML = '';
+            dashboardArea.querySelectorAll('.viz-block, .text-box').forEach(element => element.remove());
     }
     });
 
@@ -561,7 +562,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Remove button
         const removeButton = document.createElement('button');
-        removeButton.innerHTML = '×';
+        removeButton.innerHTML = '&times;';
         removeButton.style.background = 'none';
         removeButton.style.border = 'none';
         removeButton.style.cursor = 'pointer';
@@ -889,6 +890,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
+                        _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
                         dashboard_data: dashboardData
                     })
                 });

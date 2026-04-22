@@ -262,6 +262,7 @@
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
+                    _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
                     columns: selectedColumns,
                     type: selectedType,
                     sample_percentage: samplePercentage

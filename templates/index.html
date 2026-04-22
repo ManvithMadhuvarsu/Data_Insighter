@@ -173,7 +173,7 @@
             e.preventDefault();
             const filename = e.currentTarget.dataset.filename;
             try {
-                const response = await fetch(`/sample/${filename}`);
+                const response = await fetch(`/sample/${encodeURIComponent(filename)}`);
                 const data = await response.json();
                 if (data.success) {
                     // FIX #5: No filepath in URL — server stores it in session

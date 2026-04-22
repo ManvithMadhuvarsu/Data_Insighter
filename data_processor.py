@@ -2,6 +2,7 @@ import pandas as pd
 import json
 import numpy as np
 from typing import Dict, List, Any
+from file_utils import read_data_file
 
 class DataProcessor:
     def __init__(self, filepath: str):
@@ -10,83 +11,8 @@ class DataProcessor:
     
     def _load_data(self) -> pd.DataFrame:
         """Load data from file with enhanced format support and error handling"""
-        file_extension = self.filepath.rsplit('.', 1)[1].lower()
-        
         try:
-            if file_extension == 'csv':
-                # Try different encodings and separators
-                encodings = ['utf-8', 'latin1', 'iso-8859-1', 'cp1252', 'utf-16', 'utf-32']
-                separators = [',', ';', '\t', '|']
-                
-                for encoding in encodings:
-                    for sep in separators:
-                        try:
-                            # First try with C engine (faster)
-                            try:
-                                df = pd.read_csv(
-                                    self.filepath,
-                                    encoding=encoding,
-                                    sep=sep,
-                                    engine='c',
-                                    on_bad_lines='skip'
-                                )
-                                if not df.empty:
-                                    return df
-                            except:
-                                # If C engine fails, try Python engine
-                                df = pd.read_csv(
-                                    self.filepath,
-                                    encoding=encoding,
-                                    sep=sep,
-                                    engine='python',
-                                    on_bad_lines='skip'
-                                )
-                                if not df.empty:
-                                    return df
-                        except UnicodeDecodeError:
-                            continue
-                        except pd.errors.EmptyDataError:
-                            raise ValueError("The CSV file is empty")
-                        except Exception as e:
-                            print(f"Warning: Failed to read CSV with encoding {encoding} and separator {sep}: {str(e)}")
-                            continue
-                
-                raise ValueError("Could not read CSV file with any supported encoding or separator")
-                
-            elif file_extension == 'json':
-                try:
-                    # Try reading as regular JSON
-                    with open(self.filepath, 'r', encoding='utf-8') as f:
-                        json_data = json.load(f)
-                    
-                    if isinstance(json_data, list):
-                        # If it's a list of records
-                        return pd.json_normalize(json_data)
-                    elif isinstance(json_data, dict):
-                        # If it's a single record or nested structure
-                        return pd.json_normalize([json_data])
-                    else:
-                        raise ValueError("Unsupported JSON structure")
-                except json.JSONDecodeError:
-                    try:
-                        # Try reading as JSON Lines
-                        return pd.read_json(self.filepath, lines=True)
-                    except:
-                        # Try reading with different encodings
-                        encodings = ['utf-8', 'latin1', 'iso-8859-1', 'cp1252', 'utf-16', 'utf-32']
-                        for encoding in encodings:
-                            try:
-                                with open(self.filepath, 'r', encoding=encoding) as f:
-                                    json_data = json.load(f)
-                                if isinstance(json_data, list):
-                                    return pd.json_normalize(json_data)
-                                elif isinstance(json_data, dict):
-                                    return pd.json_normalize([json_data])
-                            except:
-                                continue
-                        raise ValueError("Could not read JSON file with any supported encoding")
-            else:
-                raise ValueError(f"Unsupported file format: {file_extension}")
+            return read_data_file(self.filepath)
         except Exception as e:
             raise ValueError(f"Error loading data: {str(e)}")
     

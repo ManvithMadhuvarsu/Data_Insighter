@@ -12,7 +12,7 @@ def read_data_file(filepath):
             with open(filepath, 'rb') as f:
                 raw_data = f.read()
                 result = chardet.detect(raw_data)
-                detected_encoding = result['encoding']
+                detected_encoding = result.get('encoding') or 'utf-8'
             
             # Try different approaches to read the CSV
             try:
@@ -63,8 +63,7 @@ def read_data_file(filepath):
                 # Approach 3: Try reading with default parameters and error handling
                 df = pd.read_csv(
                     filepath,
-                    error_bad_lines=False,
-                    warn_bad_lines=True,
+                    on_bad_lines='skip',
                     thousands=',',
                     decimal='.'
                 )
@@ -80,7 +79,7 @@ def read_data_file(filepath):
             with open(filepath, 'rb') as f:
                 raw_data = f.read()
                 result = chardet.detect(raw_data)
-                detected_encoding = result['encoding']
+                detected_encoding = result.get('encoding') or 'utf-8'
             
             try:
                 # Approach 1: Try reading as regular JSON

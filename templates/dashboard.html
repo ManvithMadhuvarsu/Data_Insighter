@@ -13,11 +13,34 @@
 {% block content %}
 <div class="dashboard-container">
     <div class="dashboard-header">
-        <h2>My Dashboard</h2>
+        <div>
+            <h2>My Dashboard</h2>
+            {% if dataset_record %}
+            <p class="dashboard-subtitle">
+                Dataset:
+                <strong>{{ dataset_record.metadata.display_name if dataset_record.metadata.display_name else dataset_record.source_name }}</strong>
+            </p>
+            {% endif %}
+        </div>
         <div class="header-buttons">
             <button id="addText" class="btn btn-primary">Add Text</button>
+            <button id="generateStarterDashboard" class="btn btn-secondary">Starter Dashboard</button>
+            <button id="saveWorkspaceDashboard" class="btn btn-secondary">Save to Workspace</button>
             <button id="saveDashboard" class="btn btn-success">Save Dashboard</button>
             <button id="clearDashboard" class="btn btn-danger">Clear Dashboard</button>
+        </div>
+    </div>
+
+    <div class="dashboard-library">
+        <div class="library-header">
+            <div>
+                <h3>Saved Dashboards</h3>
+                <p>Reload dashboards built for this dataset.</p>
+            </div>
+            <input id="dashboardName" type="text" placeholder="Dashboard name">
+        </div>
+        <div id="dashboardLibraryList" class="dashboard-library-list">
+            <p class="library-empty">Loading saved dashboards...</p>
         </div>
     </div>
 
@@ -46,6 +69,58 @@
     z-index: 100;
     background: white;
     padding: 10px 0;
+}
+
+.dashboard-subtitle {
+    color: #667085;
+    margin-top: -6px;
+}
+
+.dashboard-library {
+    background: #fff;
+    border: 1px solid #eaecf0;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 18px;
+}
+
+.library-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.library-header input {
+    min-width: 240px;
+    padding: 10px 12px;
+    border: 1px solid #d0d5dd;
+    border-radius: 10px;
+}
+
+.dashboard-library-list {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.dashboard-library-item {
+    border: 1px solid #eaecf0;
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: #fcfcfd;
+    min-width: 220px;
+}
+
+.dashboard-library-item h4 {
+    margin-bottom: 6px;
+}
+
+.dashboard-library-item p,
+.library-empty {
+    color: #667085;
+    margin-bottom: 10px;
 }
 
 .dashboard-area {
@@ -224,11 +299,55 @@
 document.addEventListener('DOMContentLoaded', function() {
     const dashboardArea = document.getElementById('dashboardArea');
     const clearDashboardBtn = document.getElementById('clearDashboard');
+    const dashboardLibraryList = document.getElementById('dashboardLibraryList');
+    const dashboardNameInput = document.getElementById('dashboardName');
     
     // Load visualizations from localStorage
     function loadDashboard() {
     const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
         dashboardViz.forEach(viz => createVizBlock(viz));
+    }
+
+    async function loadDashboardLibrary() {
+        try {
+            const response = await fetch('/dashboard_library');
+            const data = await response.json();
+            if (!data.success || !data.dashboards.length) {
+                dashboardLibraryList.innerHTML = '<p class="library-empty">No saved dashboards for this dataset yet.</p>';
+                return;
+            }
+
+            dashboardLibraryList.innerHTML = data.dashboards.map((dashboard) => `
+                <div class="dashboard-library-item">
+                    <h4>${dashboard.name}</h4>
+                    <p>${dashboard.chart_count} charts · updated ${new Date(dashboard.updated_at).toLocaleString()}</p>
+                    <button class="btn btn-outline load-saved-dashboard" data-id="${dashboard.id}">Load</button>
+                </div>
+            `).join('');
+
+            document.querySelectorAll('.load-saved-dashboard').forEach((button) => {
+                button.addEventListener('click', () => loadSavedDashboard(button.dataset.id));
+            });
+        } catch (error) {
+            dashboardLibraryList.innerHTML = '<p class="library-empty">Could not load saved dashboards.</p>';
+        }
+    }
+
+    async function loadSavedDashboard(id) {
+        try {
+            const response = await fetch(`/dashboards/${id}`);
+            const data = await response.json();
+            if (!data.success) {
+                throw new Error(data.error || 'Dashboard not found');
+            }
+
+            localStorage.setItem('dashboardViz', JSON.stringify(data.dashboard.dashboard_viz || []));
+            dashboardArea.querySelectorAll('.viz-block, .text-box').forEach(element => element.remove());
+            loadDashboard();
+            showSuccess('Saved dashboard loaded into the workspace.');
+        } catch (error) {
+            showError(error.message);
+        }
     }
 
     // Create a visualization block
@@ -438,6 +557,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize dashboard
     loadDashboard();
+    loadDashboardLibrary();
 
     // Make dashboard area resizable
     interact('#dashboardArea').resizable({
@@ -752,6 +872,67 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Update the save dashboard function
+    document.getElementById('saveWorkspaceDashboard').addEventListener('click', async function() {
+        const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
+        const dashboardName = dashboardNameInput.value.trim();
+
+        if (!dashboardName) {
+            showError('Name the dashboard before saving it to the workspace.');
+            return;
+        }
+
+        if (dashboardViz.length === 0) {
+            showError('Add at least one chart before saving this dashboard.');
+            return;
+        }
+
+        try {
+            const response = await fetch('/dashboards/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
+                    name: dashboardName,
+                    dashboard_viz: dashboardViz
+                })
+            });
+            const data = await response.json();
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to save dashboard.');
+            }
+            showSuccess('Dashboard saved to the workspace.');
+            loadDashboardLibrary();
+        } catch (error) {
+            showError(error.message);
+        }
+    });
+
+    document.getElementById('generateStarterDashboard').addEventListener('click', async function() {
+        try {
+            const response = await fetch('/starter_dashboard', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    _csrf_token: window.getCsrfToken ? window.getCsrfToken() : ''
+                })
+            });
+            const data = await response.json();
+            if (!data.success) {
+                throw new Error(data.error || 'Could not generate a starter dashboard.');
+            }
+            localStorage.setItem('dashboardViz', JSON.stringify(data.dashboard_viz));
+            dashboardArea.querySelectorAll('.viz-block, .text-box').forEach(element => element.remove());
+            loadDashboard();
+            showSuccess('Starter dashboard generated from recommended insights.');
+        } catch (error) {
+            showError(error.message);
+        }
+    });
+
     document.getElementById('saveDashboard').addEventListener('click', async function() {
         const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
         

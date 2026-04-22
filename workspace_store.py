@@ -38,6 +38,23 @@ def _list_user_dataset_files(username: str) -> List[str]:
     ]
 
 
+def _dashboard_path(username: str, dashboard_id: str) -> str:
+    user_dir = os.path.join(DASHBOARDS_DIR, _safe_user_segment(username))
+    os.makedirs(user_dir, exist_ok=True)
+    return os.path.join(user_dir, f'{dashboard_id}.json')
+
+
+def _list_user_dashboard_files(username: str) -> List[str]:
+    user_dir = os.path.join(DASHBOARDS_DIR, _safe_user_segment(username))
+    if not os.path.exists(user_dir):
+        return []
+    return [
+        os.path.join(user_dir, filename)
+        for filename in os.listdir(user_dir)
+        if filename.endswith('.json')
+    ]
+
+
 def _read_json(path: str) -> Optional[Dict[str, Any]]:
     try:
         with open(path, 'r', encoding='utf-8') as handle:
@@ -109,3 +126,44 @@ def list_dataset_records(username: str) -> List[Dict[str, Any]]:
     records.sort(key=lambda item: item.get('updated_at', ''), reverse=True)
     return records
 
+
+def create_dashboard_record(
+    username: str,
+    name: str,
+    dataset_id: Optional[str],
+    dashboard_viz: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    ensure_workspace_dirs()
+    dashboard_id = f"db_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{secrets.token_hex(4)}"
+    now = datetime.utcnow().isoformat() + 'Z'
+    record = {
+        'id': dashboard_id,
+        'name': name,
+        'dataset_id': dataset_id,
+        'created_at': now,
+        'updated_at': now,
+        'dashboard_viz': dashboard_viz,
+    }
+    with open(_dashboard_path(username, dashboard_id), 'w', encoding='utf-8') as handle:
+        json.dump(record, handle, indent=2)
+    return record
+
+
+def get_dashboard_record(username: str, dashboard_id: str) -> Optional[Dict[str, Any]]:
+    ensure_workspace_dirs()
+    return _read_json(_dashboard_path(username, dashboard_id))
+
+
+def list_dashboard_records(username: str, dataset_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    ensure_workspace_dirs()
+    records = []
+    for path in _list_user_dashboard_files(username):
+        record = _read_json(path)
+        if not record:
+            continue
+        if dataset_id and record.get('dataset_id') != dataset_id:
+            continue
+        records.append(record)
+
+    records.sort(key=lambda item: item.get('updated_at', ''), reverse=True)
+    return records

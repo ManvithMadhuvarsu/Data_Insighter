@@ -14,9 +14,12 @@ import secrets
 from file_utils import read_data_file
 from dotenv import load_dotenv
 from workspace_store import (
+    create_dashboard_record,
     create_dataset_record,
     ensure_workspace_dirs,
+    get_dashboard_record,
     get_dataset_record,
+    list_dashboard_records,
     list_dataset_records,
 )
 from transform_service import apply_transform
@@ -467,7 +470,10 @@ def dashboard():
     if not session.get('current_filepath'):
         flash('Please upload a file or select a sample dataset first', 'error')
         return redirect(url_for('index'))
-    return render_template('dashboard.html')
+    current_dataset = None
+    if session.get('current_dataset_id'):
+        current_dataset = get_dataset_record(session['user'], session['current_dataset_id'])
+    return render_template('dashboard.html', dataset_record=current_dataset)
 
 @app.route('/generate_visualization', methods=['POST'])
 @login_required
@@ -609,6 +615,93 @@ def clear_session():
         return jsonify({'success': True, 'message': 'Session cleared successfully'})
     except Exception as e:
         return error_response(str(e), 500)
+
+@app.route('/dashboard_library')
+@login_required
+def dashboard_library():
+    dataset_id = request.args.get('dataset_id') or session.get('current_dataset_id')
+    dashboards = list_dashboard_records(session['user'], dataset_id=dataset_id)
+    return jsonify({
+        'success': True,
+        'dashboards': [
+            {
+                'id': dashboard['id'],
+                'name': dashboard['name'],
+                'dataset_id': dashboard.get('dataset_id'),
+                'created_at': dashboard['created_at'],
+                'updated_at': dashboard['updated_at'],
+                'chart_count': len(dashboard.get('dashboard_viz', [])),
+            }
+            for dashboard in dashboards
+        ]
+    })
+
+@app.route('/dashboards/save', methods=['POST'])
+@login_required
+def save_dashboard_record():
+    if not validate_csrf_token():
+        return error_response('Invalid request token', 400)
+
+    payload = request.get_json(silent=True) or {}
+    name = (payload.get('name') or '').strip()
+    dashboard_viz = payload.get('dashboard_viz') or []
+
+    if not name:
+        return error_response('Give this dashboard a name before saving.', 400)
+    if not dashboard_viz:
+        return error_response('Add at least one chart before saving the dashboard.', 400)
+
+    record = create_dashboard_record(
+        session['user'],
+        name=name,
+        dataset_id=session.get('current_dataset_id'),
+        dashboard_viz=dashboard_viz,
+    )
+    return jsonify({'success': True, 'dashboard': record})
+
+@app.route('/dashboards/<dashboard_id>')
+@login_required
+def get_dashboard(dashboard_id):
+    record = get_dashboard_record(session['user'], dashboard_id)
+    if not record:
+        return error_response('Dashboard not found.', 404)
+    return jsonify({'success': True, 'dashboard': record})
+
+@app.route('/starter_dashboard', methods=['POST'])
+@login_required
+def starter_dashboard():
+    if not validate_csrf_token():
+        return error_response('Invalid request token', 400)
+
+    filepath = session.get('current_filepath')
+    if not filepath or not os.path.exists(filepath):
+        return error_response('No active dataset found. Load a dataset first.', 400)
+
+    processor = DataProcessor(filepath)
+    summary = processor.get_analysis_summary()
+    recommendations = summary.get('recommended_visualizations', [])[:4]
+    if not recommendations:
+        return error_response('No starter dashboard recommendations are available for this dataset yet.', 400)
+
+    starter_cards = []
+    positions = [
+        {'x': 0, 'y': 0},
+        {'x': 430, 'y': 0},
+        {'x': 0, 'y': 340},
+        {'x': 430, 'y': 340},
+    ]
+    for idx, chart in enumerate(recommendations):
+        starter_cards.append({
+            'id': int(time.time()) + idx,
+            'title': chart['title'],
+            'type': chart['type'],
+            'columns': chart['columns'],
+            'samplePercentage': chart.get('sample_percentage', 100),
+            'position': positions[idx] if idx < len(positions) else {'x': 0, 'y': idx * 320},
+            'size': {'width': 400, 'height': 300},
+        })
+
+    return jsonify({'success': True, 'dashboard_viz': starter_cards})
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():

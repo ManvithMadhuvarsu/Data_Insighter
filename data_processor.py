@@ -6,6 +6,14 @@ import numpy as np
 import pandas as pd
 
 from file_utils import read_data_file
+from insight_engine import (
+    anomaly_insights,
+    build_executive_takeaways,
+    contribution_insights,
+    seasonality_insights,
+    segment_driver_insights,
+)
+from semantic_model import infer_dataset_semantics
 
 
 class DataProcessor:
@@ -81,6 +89,20 @@ class DataProcessor:
         excluded = set(self._numeric_columns()) | set(self._datetime_columns())
         candidates = [column for column in self.df.columns if column not in excluded]
         return candidates
+
+    def _semantic_profiles(self) -> List[Dict[str, Any]]:
+        return infer_dataset_semantics(self.df)
+
+    def _semantic_groups(self) -> Dict[str, List[str]]:
+        groups: Dict[str, List[str]] = {
+            'measure': [],
+            'dimension': [],
+            'datetime': [],
+            'identifier': [],
+        }
+        for profile in self._semantic_profiles():
+            groups.setdefault(profile['semantic_role'], []).append(profile['name'])
+        return groups
 
     def _column_profiles(self) -> List[Dict[str, Any]]:
         profiles: List[Dict[str, Any]] = []
@@ -357,6 +379,21 @@ class DataProcessor:
 
         return recommendations[:6]
 
+    def _advanced_insights(self) -> List[Dict[str, Any]]:
+        semantics = self._semantic_groups()
+        measures = semantics.get('measure', [])
+        dimensions = semantics.get('dimension', [])
+        datetimes = semantics.get('datetime', [])
+
+        findings = (
+            anomaly_insights(self.df, measures)
+            + segment_driver_insights(self.df, dimensions, measures)
+            + contribution_insights(self.df, dimensions, measures)
+            + seasonality_insights(self.df, datetimes, measures)
+        )
+        findings.sort(key=lambda item: item['score'], reverse=True)
+        return findings[:6]
+
     def get_data_info(self) -> Dict[str, Any]:
         """Get a concise summary used by the upload flow."""
         return {
@@ -381,13 +418,16 @@ class DataProcessor:
 
         completeness = 100 - self._safe_ratio(self.df.isna().sum().sum(), max(row_count * max(len(self.df.columns), 1), 1))
 
-        key_insights = (
+        foundational_insights = (
             self._correlation_insights()
             + self._time_insights()
             + self._categorical_insights()
             + self._distribution_insights()
         )
-        key_insights = sorted(key_insights, key=lambda item: item['score'], reverse=True)[:6]
+        advanced_insights = self._advanced_insights()
+        key_insights = sorted(foundational_insights + advanced_insights, key=lambda item: item['score'], reverse=True)[:8]
+        semantic_profiles = self._semantic_profiles()
+        quality_alerts = self._quality_alerts()
 
         return {
             'dataset_overview': {
@@ -400,8 +440,10 @@ class DataProcessor:
                 'duplicate_rows': duplicate_count,
                 'duplicate_pct': self._safe_ratio(duplicate_count, row_count),
             },
-            'quality_alerts': self._quality_alerts(),
+            'quality_alerts': quality_alerts,
             'key_insights': key_insights,
             'recommended_visualizations': self._recommended_visualizations(),
             'column_profiles': self._column_profiles(),
+            'semantic_profiles': semantic_profiles,
+            'executive_takeaways': build_executive_takeaways(key_insights, quality_alerts),
         }

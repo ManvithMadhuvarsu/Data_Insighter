@@ -124,6 +124,16 @@
             <div class="panel">
                 <div class="panel-header">
                     <div>
+                        <p class="eyebrow">Semantic Layer</p>
+                        <h2>What each field means</h2>
+                    </div>
+                </div>
+                <div id="semanticProfiles" class="profile-list loading-text">Inferring measures, dimensions, identifiers, and time fields...</div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
                         <p class="eyebrow">Quality Check</p>
                         <h2>Data health</h2>
                     </div>
@@ -153,6 +163,16 @@
         </aside>
 
         <main class="analysis-main">
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow">Executive Summary</p>
+                        <h2>Top takeaways</h2>
+                    </div>
+                </div>
+                <div id="executiveTakeaways" class="stack-list loading-text">Writing a concise summary from the dataset...</div>
+            </div>
+
             <div class="panel">
                 <div class="panel-header">
                     <div>
@@ -446,6 +466,17 @@
     gap: 12px;
 }
 
+.semantic-pill {
+    display: inline-flex;
+    margin-top: 8px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #fff7ed;
+    color: #9a3412;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
 .recommendation-actions {
     display: flex;
     gap: 10px;
@@ -710,6 +741,24 @@ function renderProfiles(profiles) {
     }).join('');
 }
 
+function renderSemanticProfiles(profiles) {
+    document.getElementById('semanticProfiles').innerHTML = profiles.slice(0, 10).map((profile) => `
+        <div class="profile-card">
+            <div class="card-title">${profile.name}</div>
+            <div class="semantic-pill">${profile.semantic_role} · ${profile.subtype}</div>
+            <div class="card-detail" style="margin-top:10px;">${profile.rationale.join(' ')}</div>
+        </div>
+    `).join('');
+}
+
+function renderExecutiveTakeaways(items) {
+    document.getElementById('executiveTakeaways').innerHTML = items.map((item) => `
+        <div class="insight-card">
+            <div class="card-detail">${item}</div>
+        </div>
+    `).join('');
+}
+
 function recommendationButton(chart, label = 'Open Chart') {
     const chartPayload = encodeURIComponent(JSON.stringify(chart));
     return `<button class="btn btn-primary use-recommendation" data-chart="${chartPayload}">${label}</button>`;
@@ -756,6 +805,8 @@ async function loadAnalysisSummary() {
     renderKeyInsights(data.summary.key_insights);
     renderRecommendations(data.summary.recommended_visualizations);
     renderProfiles(data.summary.column_profiles);
+    renderSemanticProfiles(data.summary.semantic_profiles || []);
+    renderExecutiveTakeaways(data.summary.executive_takeaways || []);
 }
 
 async function applyTransform(operation, options = {}) {
@@ -1001,6 +1052,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('keyInsights').textContent = 'Automatic insights are unavailable right now.';
         document.getElementById('recommendedCharts').textContent = 'Chart recommendations could not be loaded.';
         document.getElementById('columnProfiles').textContent = 'Column profiling could not be loaded.';
+        document.getElementById('semanticProfiles').textContent = 'Semantic field inference could not be loaded.';
+        document.getElementById('executiveTakeaways').textContent = 'Executive takeaways could not be generated.';
     }
 });
 </script>

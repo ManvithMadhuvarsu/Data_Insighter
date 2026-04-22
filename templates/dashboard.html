@@ -44,6 +44,26 @@
         </div>
     </div>
 
+    <div class="dashboard-filters">
+        <div class="library-header">
+            <div>
+                <h3>Global Dashboard Filter</h3>
+                <p>Apply one reusable segment filter across all dashboard charts.</p>
+            </div>
+        </div>
+        <div class="filter-grid">
+            <select id="globalFilterColumn">
+                <option value="">Choose a dimension</option>
+            </select>
+            <select id="globalFilterValue">
+                <option value="__all__">All values</option>
+            </select>
+            <button id="applyDashboardFilter" class="btn btn-outline">Apply Filter</button>
+            <button id="clearDashboardFilter" class="btn btn-outline">Clear Filter</button>
+        </div>
+        <p id="dashboardFilterStatus" class="library-empty">No global filter applied.</p>
+    </div>
+
     <div id="dashboardArea" class="dashboard-area">
         <!-- Visualization blocks will be added here -->
         <div id="dashboardResizeHandle" class="dashboard-resize-handle"></div>
@@ -82,6 +102,26 @@
     border-radius: 14px;
     padding: 16px;
     margin-bottom: 18px;
+}
+
+.dashboard-filters {
+    background: #fff;
+    border: 1px solid #eaecf0;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 18px;
+}
+
+.filter-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto auto;
+    gap: 12px;
+}
+
+.filter-grid select {
+    padding: 10px 12px;
+    border: 1px solid #d0d5dd;
+    border-radius: 10px;
 }
 
 .library-header {
@@ -301,11 +341,57 @@ document.addEventListener('DOMContentLoaded', function() {
     const clearDashboardBtn = document.getElementById('clearDashboard');
     const dashboardLibraryList = document.getElementById('dashboardLibraryList');
     const dashboardNameInput = document.getElementById('dashboardName');
+    const globalFilterColumn = document.getElementById('globalFilterColumn');
+    const globalFilterValue = document.getElementById('globalFilterValue');
+    const dashboardFilterStatus = document.getElementById('dashboardFilterStatus');
+    let dashboardFilterState = JSON.parse(localStorage.getItem('dashboardFilterState') || '{}');
     
     // Load visualizations from localStorage
     function loadDashboard() {
     const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
         dashboardViz.forEach(viz => createVizBlock(viz));
+    }
+
+    function saveFilterState() {
+        localStorage.setItem('dashboardFilterState', JSON.stringify(dashboardFilterState));
+        if (dashboardFilterState.column && dashboardFilterState.value && dashboardFilterState.value !== '__all__') {
+            dashboardFilterStatus.textContent = `Global filter applied: ${dashboardFilterState.column} = ${dashboardFilterState.value}`;
+        } else {
+            dashboardFilterStatus.textContent = 'No global filter applied.';
+        }
+    }
+
+    async function loadFilterOptions() {
+        try {
+            const response = await fetch('/dashboard_filter_options');
+            const data = await response.json();
+            if (!data.success) {
+                return;
+            }
+
+            const options = data.options || {};
+            globalFilterColumn.innerHTML = '<option value="">Choose a dimension</option>' + Object.keys(options)
+                .map((column) => `<option value="${column}">${column}</option>`)
+                .join('');
+
+            if (dashboardFilterState.column && options[dashboardFilterState.column]) {
+                globalFilterColumn.value = dashboardFilterState.column;
+                updateFilterValues(options);
+                globalFilterValue.value = dashboardFilterState.value || '__all__';
+            }
+
+            globalFilterColumn.addEventListener('change', () => updateFilterValues(options));
+        } catch (error) {
+            dashboardFilterStatus.textContent = 'Could not load dashboard filter options.';
+        }
+    }
+
+    function updateFilterValues(options) {
+        const column = globalFilterColumn.value;
+        const values = column ? (options[column] || []) : [];
+        globalFilterValue.innerHTML = '<option value="__all__">All values</option>' + values
+            .map((value) => `<option value="${value}">${value}</option>`)
+            .join('');
     }
 
     async function loadDashboardLibrary() {
@@ -342,6 +428,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             localStorage.setItem('dashboardViz', JSON.stringify(data.dashboard.dashboard_viz || []));
+            dashboardFilterState = data.dashboard.dashboard_state || {};
+            saveFilterState();
             dashboardArea.querySelectorAll('.viz-block, .text-box').forEach(element => element.remove());
             loadDashboard();
             showSuccess('Saved dashboard loaded into the workspace.');
@@ -399,7 +487,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
                     columns: viz.columns,
                     type: viz.type,
-                    sample_percentage: viz.samplePercentage
+                    sample_percentage: viz.samplePercentage,
+                    filters: dashboardFilterState,
                 })
             });
 
@@ -558,6 +647,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize dashboard
     loadDashboard();
     loadDashboardLibrary();
+    loadFilterOptions();
+    saveFilterState();
 
     // Make dashboard area resizable
     interact('#dashboardArea').resizable({
@@ -895,7 +986,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({
                     _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
                     name: dashboardName,
-                    dashboard_viz: dashboardViz
+                    dashboard_viz: dashboardViz,
+                    dashboard_state: dashboardFilterState
                 })
             });
             const data = await response.json();
@@ -931,6 +1023,35 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             showError(error.message);
         }
+    });
+
+    document.getElementById('applyDashboardFilter').addEventListener('click', function() {
+        dashboardFilterState = {
+            column: globalFilterColumn.value,
+            value: globalFilterValue.value
+        };
+        saveFilterState();
+        dashboardArea.querySelectorAll('.viz-block, .text-box').forEach(element => {
+            if (element.classList.contains('viz-block')) {
+                element.remove();
+            }
+        });
+        loadDashboard();
+        showSuccess('Dashboard filter applied.');
+    });
+
+    document.getElementById('clearDashboardFilter').addEventListener('click', function() {
+        dashboardFilterState = {};
+        globalFilterColumn.value = '';
+        globalFilterValue.innerHTML = '<option value="__all__">All values</option>';
+        saveFilterState();
+        dashboardArea.querySelectorAll('.viz-block, .text-box').forEach(element => {
+            if (element.classList.contains('viz-block')) {
+                element.remove();
+            }
+        });
+        loadDashboard();
+        showSuccess('Dashboard filter cleared.');
     });
 
     document.getElementById('saveDashboard').addEventListener('click', async function() {

@@ -7,6 +7,7 @@ import os
 from datetime import datetime
 import numpy as np
 from scipy import stats
+import warnings
 from sklearn.linear_model import LinearRegression
 from file_utils import read_data_file
 
@@ -215,13 +216,27 @@ class VisualizationGenerator:
                     df[col] = numeric_series
                     continue
 
-                datetime_series = pd.to_datetime(df[col], errors='coerce')
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore', UserWarning)
+                    datetime_series = pd.to_datetime(df[col], errors='coerce')
                 if datetime_series.notna().mean() >= 0.8:
                     df[col] = datetime_series
 
         return df.dropna(how='all')
+
+    def _apply_filters(self, df: pd.DataFrame, filters: Dict[str, Any] | None) -> pd.DataFrame:
+        if not filters:
+            return df
+
+        working = df.copy()
+        column = filters.get('column')
+        value = filters.get('value')
+        if column and column in working.columns and value not in (None, '', '__all__'):
+            working = working[working[column].astype(str) == str(value)]
+
+        return working
         
-    def generate_visualization(self, columns: List[str], viz_type: str, sample_percentage: int = 100) -> Dict:
+    def generate_visualization(self, columns: List[str], viz_type: str, sample_percentage: int = 100, filters: Dict[str, Any] | None = None) -> Dict:
         """Generate a single visualization based on columns and type."""
         try:
             if self.df is None:
@@ -236,6 +251,7 @@ class VisualizationGenerator:
                 raise ValueError(f"Columns not found: {', '.join(missing_cols)}")
             
             df = self._prepare_subset(columns, sample_percentage)
+            df = self._apply_filters(df, filters)
             if df.empty:
                 raise ValueError("The selected columns do not contain enough usable values to visualize")
             

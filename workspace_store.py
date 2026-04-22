@@ -132,6 +132,7 @@ def create_dashboard_record(
     name: str,
     dataset_id: Optional[str],
     dashboard_viz: List[Dict[str, Any]],
+    dashboard_state: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     ensure_workspace_dirs()
     dashboard_id = f"db_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{secrets.token_hex(4)}"
@@ -143,6 +144,7 @@ def create_dashboard_record(
         'created_at': now,
         'updated_at': now,
         'dashboard_viz': dashboard_viz,
+        'dashboard_state': dashboard_state or {},
     }
     with open(_dashboard_path(username, dashboard_id), 'w', encoding='utf-8') as handle:
         json.dump(record, handle, indent=2)

@@ -544,6 +544,7 @@ def generate_visualization():
         columns = data.get('columns')
         viz_type = data.get('type')
         sample_percentage = data.get('sample_percentage', 100)
+        filters = data.get('filters')
         
         if not filepath:
             return error_response('No data file loaded. Please upload a file first.', 400)
@@ -561,7 +562,8 @@ def generate_visualization():
         visualization = viz_generator.generate_visualization(
             columns, 
             viz_type, 
-            sample_percentage
+            sample_percentage,
+            filters
         )
         
         return jsonify({
@@ -701,6 +703,7 @@ def save_dashboard_record():
     payload = request.get_json(silent=True) or {}
     name = (payload.get('name') or '').strip()
     dashboard_viz = payload.get('dashboard_viz') or []
+    dashboard_state = payload.get('dashboard_state') or {}
 
     if not name:
         return error_response('Give this dashboard a name before saving.', 400)
@@ -712,6 +715,7 @@ def save_dashboard_record():
         name=name,
         dataset_id=session.get('current_dataset_id'),
         dashboard_viz=dashboard_viz,
+        dashboard_state=dashboard_state,
     )
     return jsonify({'success': True, 'dashboard': record})
 
@@ -758,6 +762,33 @@ def starter_dashboard():
         })
 
     return jsonify({'success': True, 'dashboard_viz': starter_cards})
+
+@app.route('/dashboard_filter_options')
+@login_required
+def dashboard_filter_options():
+    filepath = session.get('current_filepath')
+    if not filepath or not os.path.exists(filepath):
+        return error_response('No active dataset found. Load a dataset first.', 400)
+
+    try:
+        processor = DataProcessor(filepath)
+        summary = processor.get_analysis_summary()
+        semantic_profiles = summary.get('semantic_profiles', [])
+        dimension_columns = [
+            profile['name']
+            for profile in semantic_profiles
+            if profile.get('semantic_role') == 'dimension'
+            and (profile.get('unique_count', 0) <= 20 or profile.get('subtype') == 'geography')
+        ]
+        df = processor.df
+        options = {}
+        for column in dimension_columns[:8]:
+            values = [str(value) for value in df[column].dropna().astype(str).value_counts().head(15).index.tolist()]
+            options[column] = values
+
+        return jsonify({'success': True, 'options': options})
+    except Exception as e:
+        return error_response(str(e), 400)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():

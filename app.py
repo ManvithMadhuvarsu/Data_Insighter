@@ -16,14 +16,17 @@ from dotenv import load_dotenv
 from workspace_store import (
     create_dashboard_record,
     create_dataset_record,
+    create_relationship_record,
     ensure_workspace_dirs,
     get_dashboard_record,
     get_dataset_record,
     list_dashboard_records,
     list_dataset_records,
+    list_relationship_records,
 )
 from transform_service import apply_transform
 from report_service import build_report_payload
+from data_model_service import join_datasets, suggest_relationships
 
 # Load environment variables from .env file
 load_dotenv()
@@ -473,6 +476,12 @@ def apply_dataset_transform():
             current_record = get_dataset_record(session['user'], session['current_dataset_id'])
 
         source_name = current_record['source_name'] if current_record else os.path.basename(filepath)
+        parent_lineage = current_record.get('metadata', {}).get('lineage_steps', []) if current_record else []
+        lineage_step = {
+            'operation': operation,
+            'description': description,
+            'created_at': datetime.utcnow().isoformat() + 'Z',
+        }
         derived_path, derived_filename = store_derived_dataset(transformed_df, source_name)
         dataset_record = create_dataset_record(
             session['user'],
@@ -487,6 +496,7 @@ def apply_dataset_transform():
                 'columns': transformed_df.columns.tolist(),
                 'transform_operation': operation,
                 'transform_description': description,
+                'lineage_steps': parent_lineage + [lineage_step],
             },
         )
 
@@ -499,6 +509,126 @@ def apply_dataset_transform():
             'message': description,
             'dataset': dataset_record,
             'summary': processor.get_analysis_summary(),
+        })
+    except Exception as e:
+        return error_response(str(e), 400)
+
+@app.route('/data_model')
+@login_required
+def data_model():
+    datasets = [
+        record
+        for record in list_dataset_records(session['user'])
+        if os.path.exists(record.get('stored_path', ''))
+    ]
+    model = suggest_relationships(datasets)
+    relationships = list_relationship_records(session['user'])
+    return jsonify({
+        'success': True,
+        'model': model,
+        'relationships': relationships,
+    })
+
+@app.route('/relationships/save', methods=['POST'])
+@login_required
+def save_relationship():
+    if not validate_csrf_token():
+        return error_response('Invalid request token', 400)
+
+    payload = request.get_json(silent=True) or {}
+    required = ['left_dataset_id', 'left_column', 'right_dataset_id', 'right_column']
+    if any(not payload.get(field) for field in required):
+        return error_response('Choose both datasets and key columns before saving a relationship.', 400)
+
+    left_record = get_dataset_record(session['user'], payload['left_dataset_id'])
+    right_record = get_dataset_record(session['user'], payload['right_dataset_id'])
+    if not left_record or not right_record:
+        return error_response('One of the selected datasets was not found.', 404)
+
+    record = create_relationship_record(
+        session['user'],
+        left_dataset_id=payload['left_dataset_id'],
+        left_column=payload['left_column'],
+        right_dataset_id=payload['right_dataset_id'],
+        right_column=payload['right_column'],
+        join_type=payload.get('join_type') or 'left',
+        confidence=payload.get('confidence'),
+    )
+    return jsonify({'success': True, 'relationship': record})
+
+@app.route('/relationships/join', methods=['POST'])
+@login_required
+def create_joined_dataset():
+    if not validate_csrf_token():
+        return error_response('Invalid request token', 400)
+
+    payload = request.get_json(silent=True) or {}
+    left_record = get_dataset_record(session['user'], payload.get('left_dataset_id', ''))
+    right_record = get_dataset_record(session['user'], payload.get('right_dataset_id', ''))
+    if not left_record or not right_record:
+        return error_response('Choose two valid datasets to join.', 400)
+
+    try:
+        joined_df = join_datasets(
+            left_record,
+            right_record,
+            left_key=payload.get('left_column'),
+            right_key=payload.get('right_column'),
+            join_type=payload.get('join_type') or 'left',
+        )
+        if joined_df.empty:
+            return error_response('The join produced no rows. Try a different key or join type.', 400)
+
+        left_name = left_record.get('metadata', {}).get('display_name') or left_record['source_name']
+        right_name = right_record.get('metadata', {}).get('display_name') or right_record['source_name']
+        derived_path, derived_filename = store_derived_dataset(joined_df, f'{left_name}_joined_{right_name}')
+        dataset_record = create_dataset_record(
+            session['user'],
+            source_name=derived_filename,
+            stored_path=derived_path,
+            source_type='joined',
+            row_count=len(joined_df),
+            column_count=len(joined_df.columns),
+            parent_dataset_id=left_record['id'],
+            metadata={
+                'display_name': f'{left_name} joined with {right_name}',
+                'columns': joined_df.columns.tolist(),
+                'join': {
+                    'left_dataset_id': left_record['id'],
+                    'left_column': payload.get('left_column'),
+                    'right_dataset_id': right_record['id'],
+                    'right_column': payload.get('right_column'),
+                    'join_type': payload.get('join_type') or 'left',
+                },
+                'lineage_steps': (
+                    left_record.get('metadata', {}).get('lineage_steps', [])
+                    + [{
+                        'operation': 'join',
+                        'description': f"Joined {left_name} to {right_name} on {payload.get('left_column')} = {payload.get('right_column')}.",
+                        'created_at': datetime.utcnow().isoformat() + 'Z',
+                    }]
+                ),
+            },
+        )
+
+        create_relationship_record(
+            session['user'],
+            left_dataset_id=left_record['id'],
+            left_column=payload.get('left_column'),
+            right_dataset_id=right_record['id'],
+            right_column=payload.get('right_column'),
+            join_type=payload.get('join_type') or 'left',
+            confidence=payload.get('confidence'),
+        )
+
+        session['current_dataset_id'] = dataset_record['id']
+        session['current_filepath'] = derived_path
+        processor = DataProcessor(derived_path)
+        return jsonify({
+            'success': True,
+            'dataset': dataset_record,
+            'summary': processor.get_analysis_summary(),
+            'message': f'Created joined dataset with {len(joined_df)} rows and {len(joined_df.columns)} columns.',
         })
     except Exception as e:
         return error_response(str(e), 400)

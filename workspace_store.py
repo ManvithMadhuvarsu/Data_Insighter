@@ -9,11 +9,13 @@ from typing import Any, Dict, List, Optional
 BASE_DIR = os.path.join(os.path.dirname(__file__), 'workspace_data')
 DATASETS_DIR = os.path.join(BASE_DIR, 'datasets')
 DASHBOARDS_DIR = os.path.join(BASE_DIR, 'dashboards')
+RELATIONSHIPS_DIR = os.path.join(BASE_DIR, 'relationships')
 
 
 def ensure_workspace_dirs() -> None:
     os.makedirs(DATASETS_DIR, exist_ok=True)
     os.makedirs(DASHBOARDS_DIR, exist_ok=True)
+    os.makedirs(RELATIONSHIPS_DIR, exist_ok=True)
 
 
 def _safe_user_segment(username: str) -> str:
@@ -46,6 +48,23 @@ def _dashboard_path(username: str, dashboard_id: str) -> str:
 
 def _list_user_dashboard_files(username: str) -> List[str]:
     user_dir = os.path.join(DASHBOARDS_DIR, _safe_user_segment(username))
+    if not os.path.exists(user_dir):
+        return []
+    return [
+        os.path.join(user_dir, filename)
+        for filename in os.listdir(user_dir)
+        if filename.endswith('.json')
+    ]
+
+
+def _relationship_path(username: str, relationship_id: str) -> str:
+    user_dir = os.path.join(RELATIONSHIPS_DIR, _safe_user_segment(username))
+    os.makedirs(user_dir, exist_ok=True)
+    return os.path.join(user_dir, f'{relationship_id}.json')
+
+
+def _list_user_relationship_files(username: str) -> List[str]:
+    user_dir = os.path.join(RELATIONSHIPS_DIR, _safe_user_segment(username))
     if not os.path.exists(user_dir):
         return []
     return [
@@ -166,6 +185,46 @@ def list_dashboard_records(username: str, dataset_id: Optional[str] = None) -> L
         if dataset_id and record.get('dataset_id') != dataset_id:
             continue
         records.append(record)
+
+    records.sort(key=lambda item: item.get('updated_at', ''), reverse=True)
+    return records
+
+
+def create_relationship_record(
+    username: str,
+    left_dataset_id: str,
+    left_column: str,
+    right_dataset_id: str,
+    right_column: str,
+    join_type: str,
+    confidence: Optional[float] = None,
+) -> Dict[str, Any]:
+    ensure_workspace_dirs()
+    relationship_id = f"rel_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{secrets.token_hex(4)}"
+    now = datetime.utcnow().isoformat() + 'Z'
+    record = {
+        'id': relationship_id,
+        'left_dataset_id': left_dataset_id,
+        'left_column': left_column,
+        'right_dataset_id': right_dataset_id,
+        'right_column': right_column,
+        'join_type': join_type,
+        'confidence': confidence,
+        'created_at': now,
+        'updated_at': now,
+    }
+    with open(_relationship_path(username, relationship_id), 'w', encoding='utf-8') as handle:
+        json.dump(record, handle, indent=2)
+    return record
+
+
+def list_relationship_records(username: str) -> List[Dict[str, Any]]:
+    ensure_workspace_dirs()
+    records = []
+    for path in _list_user_relationship_files(username):
+        record = _read_json(path)
+        if record:
+            records.append(record)
 
     records.sort(key=lambda item: item.get('updated_at', ''), reverse=True)
     return records

@@ -120,6 +120,28 @@
                 </div>
 
                 <div id="prepStatus" class="prep-status">Derived datasets created here become new workspace versions, so the original upload stays intact.</div>
+
+                <div class="model-studio">
+                    <div class="panel-header compact">
+                        <div>
+                            <p class="eyebrow">Data Model</p>
+                            <h2>Relationships and joins</h2>
+                        </div>
+                    </div>
+                    <p class="card-detail">Connect multiple uploaded tables, accept suggested keys, and create a joined dataset for analysis.</p>
+                    <button id="loadDataModel" class="btn btn-outline">Scan Workspace Tables</button>
+                    <div id="relationshipSuggestions" class="relationship-list loading-text">Upload or save multiple datasets to unlock relationship suggestions.</div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow">Lineage</p>
+                        <h2>Transform history</h2>
+                    </div>
+                </div>
+                <div id="lineageSteps" class="stack-list loading-text">Loading dataset history...</div>
             </div>
 
             <div class="panel">
@@ -422,6 +444,36 @@
     margin-top: 14px;
     color: #667085;
     font-size: 0.93rem;
+}
+
+.model-studio {
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid #eaecf0;
+}
+
+.panel-header.compact {
+    margin-bottom: 8px;
+}
+
+.relationship-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.relationship-card {
+    border: 1px solid #eaecf0;
+    border-radius: 14px;
+    padding: 12px;
+    background: #fcfcfd;
+}
+
+.relationship-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
 }
 
 .insight-card,
@@ -783,6 +835,22 @@ function renderExecutiveTakeaways(items) {
     `).join('');
 }
 
+function renderLineage(dataset) {
+    const container = document.getElementById('lineageSteps');
+    const steps = dataset?.metadata?.lineage_steps || [];
+    if (!steps.length) {
+        container.innerHTML = '<div class="profile-card"><div class="card-detail">This dataset is the current source version. Transform and join steps will appear here as reusable history.</div></div>';
+        return;
+    }
+    container.innerHTML = steps.map((step, index) => `
+        <div class="profile-card">
+            <div class="card-title">Step ${index + 1}: ${step.operation}</div>
+            <div class="card-detail">${step.description}</div>
+            <span class="card-stat">${step.created_at || 'recorded'}</span>
+        </div>
+    `).join('');
+}
+
 function renderReportPreview(report) {
     currentReport = report;
     document.getElementById('reportPreview').innerHTML = report.sections.map((section) => `
@@ -843,6 +911,103 @@ async function loadAnalysisSummary() {
     renderProfiles(data.summary.column_profiles);
     renderSemanticProfiles(data.summary.semantic_profiles || []);
     renderExecutiveTakeaways(data.summary.executive_takeaways || []);
+    renderLineage(data.dataset);
+}
+
+function relationshipPayloadFromButton(button) {
+    return JSON.parse(decodeURIComponent(button.dataset.relationship));
+}
+
+function renderDataModel(model, relationships = []) {
+    const container = document.getElementById('relationshipSuggestions');
+    const suggestions = model.suggestions || [];
+    const datasetCount = (model.datasets || []).length;
+
+    if (datasetCount < 2) {
+        container.innerHTML = '<div class="relationship-card"><div class="card-detail">Save at least two datasets in your workspace to get join and relationship suggestions.</div></div>';
+        return;
+    }
+
+    const savedNote = relationships.length
+        ? `<div class="card-detail">${relationships.length} relationship${relationships.length === 1 ? '' : 's'} already saved in this workspace.</div>`
+        : '';
+
+    if (!suggestions.length) {
+        container.innerHTML = `${savedNote}<div class="relationship-card"><div class="card-detail">No confident key overlaps were found yet. Try datasets with shared ID, code, customer, product, or date keys.</div></div>`;
+        return;
+    }
+
+    container.innerHTML = savedNote + suggestions.map((suggestion) => {
+        const payload = encodeURIComponent(JSON.stringify(suggestion));
+        return `
+            <div class="relationship-card">
+                <div class="card-title">${suggestion.left_dataset_name} -> ${suggestion.right_dataset_name}</div>
+                <div class="card-detail">${suggestion.left_column} = ${suggestion.right_column}</div>
+                <span class="card-stat">Confidence ${Math.round(suggestion.confidence * 100)}% / overlap ${Math.round(suggestion.overlap_score * 100)}%</span>
+                <div class="relationship-actions">
+                    <button class="btn btn-outline save-relationship" data-relationship="${payload}">Save Relationship</button>
+                    <button class="btn btn-primary join-relationship" data-relationship="${payload}">Create Joined Dataset</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    document.querySelectorAll('.save-relationship').forEach((button) => {
+        button.addEventListener('click', async () => saveRelationship(relationshipPayloadFromButton(button)));
+    });
+    document.querySelectorAll('.join-relationship').forEach((button) => {
+        button.addEventListener('click', async () => createJoinedDataset(relationshipPayloadFromButton(button)));
+    });
+}
+
+async function loadDataModel() {
+    const container = document.getElementById('relationshipSuggestions');
+    container.textContent = 'Scanning saved datasets for shared keys and join candidates...';
+    const response = await fetch('/data_model');
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to scan the data model');
+    }
+    renderDataModel(data.model, data.relationships || []);
+}
+
+async function saveRelationship(relationship) {
+    const response = await fetch('/relationships/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
+            ...relationship,
+            join_type: relationship.recommended_join || 'left',
+        })
+    });
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to save relationship');
+    }
+    document.getElementById('relationshipSuggestions').insertAdjacentHTML(
+        'afterbegin',
+        '<div class="relationship-card"><div class="card-detail">Relationship saved to the workspace model.</div></div>'
+    );
+}
+
+async function createJoinedDataset(relationship) {
+    const container = document.getElementById('relationshipSuggestions');
+    container.insertAdjacentHTML('afterbegin', '<div class="relationship-card"><div class="card-detail">Creating joined dataset version...</div></div>');
+    const response = await fetch('/relationships/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
+            ...relationship,
+            join_type: relationship.recommended_join || 'left',
+        })
+    });
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to create joined dataset');
+    }
+    window.location.href = '/analysis';
 }
 
 async function loadExecutiveReport() {
@@ -1136,10 +1301,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             showError(error.message);
         }
     });
+    document.getElementById('loadDataModel').addEventListener('click', async () => {
+        try {
+            await loadDataModel();
+        } catch (error) {
+            showError(error.message);
+            document.getElementById('relationshipSuggestions').textContent = 'Data model scan failed.';
+        }
+    });
 
     try {
         await loadAnalysisSummary();
         await loadExecutiveReport();
+        await loadDataModel();
     } catch (error) {
         showError(error.message);
         document.getElementById('qualityAlerts').textContent = 'Unable to inspect the dataset.';
@@ -1149,6 +1323,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('semanticProfiles').textContent = 'Semantic field inference could not be loaded.';
         document.getElementById('executiveTakeaways').textContent = 'Executive takeaways could not be generated.';
         document.getElementById('reportPreview').textContent = 'Report preview could not be generated.';
+        document.getElementById('lineageSteps').textContent = 'Lineage history could not be loaded.';
     }
 });
 </script>

@@ -5,11 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}Data Insighter{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/data-analysis.svg') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/gridstack@7.2.3/dist/gridstack-all.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/gridstack@7.2.3/dist/gridstack.min.css" rel="stylesheet"/>
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -33,6 +32,9 @@
             <a href="{{ url_for('index') }}" class="nav-brand">
                 <span class="brand-text">Data Insighter</span>
             </a>
+            <button class="nav-toggle" type="button" aria-label="Toggle navigation">
+                <i class="fas fa-bars"></i>
+            </button>
             <div class="nav-links">
                 <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">
                     <i class="fas fa-home"></i>
@@ -105,7 +107,7 @@
             </div>
         </div>
         <div class="footer-bottom">
-            <p>&copy; 2024 Data Insighter. All rights reserved.</p>
+            <p>&copy; {{ current_year }} Data Insighter. All rights reserved.</p>
         </div>
     </footer>
 
@@ -169,7 +171,6 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    sessionStorage.removeItem('redirecting');
                     if (window.location.pathname !== '/') {
                         window.location.href = '/';
                     }
@@ -179,7 +180,6 @@
             })
             .catch(error => {
                 console.error('Error:', error);
-                sessionStorage.removeItem('redirecting');
             });
         }
 

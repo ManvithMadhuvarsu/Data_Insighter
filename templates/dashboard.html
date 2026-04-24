@@ -339,6 +339,27 @@
     width: 100%;
     margin-top: 1rem;
 }
+
+@media (max-width: 900px) {
+    .dashboard-header,
+    .library-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .header-buttons {
+        flex-wrap: wrap;
+    }
+
+    .filter-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .library-header input {
+        width: 100%;
+        min-width: 0;
+    }
+}
 </style>
 
 <script>
@@ -441,7 +462,7 @@ document.addEventListener('DOMContentLoaded', function() {
             dashboardLibraryList.innerHTML = data.dashboards.map((dashboard) => `
                 <div class="dashboard-library-item">
                     <h4>${dashboard.name}</h4>
-                    <p>${dashboard.chart_count} charts · updated ${new Date(dashboard.updated_at).toLocaleString()}</p>
+                    <p>${dashboard.chart_count} charts / updated ${new Date(dashboard.updated_at).toLocaleString()}</p>
                     <button class="btn btn-outline load-saved-dashboard" data-id="${dashboard.id}">Load</button>
                 </div>
             `).join('');

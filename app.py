@@ -90,6 +90,11 @@ def validate_csrf_token():
 # Make csrf_token available in all templates
 app.jinja_env.globals['csrf_token'] = generate_csrf_token
 
+
+@app.context_processor
+def inject_template_globals():
+    return {'current_year': datetime.now().year}
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'csv', 'json'}
 
@@ -112,6 +117,19 @@ def cleanup_uploaded_file(filepath):
             os.remove(filepath)
         except OSError:
             pass
+
+
+def is_tracked_dataset_path(username, filepath):
+    """Return True when the path belongs to a saved dataset for this user."""
+    if not filepath:
+        return False
+
+    normalized = os.path.abspath(filepath)
+    for dataset in list_dataset_records(username):
+        stored_path = dataset.get('stored_path')
+        if stored_path and os.path.abspath(stored_path) == normalized:
+            return True
+    return False
 
 def store_derived_dataset(df, base_name):
     safe_base = secure_filename(os.path.splitext(base_name)[0] or 'dataset')
@@ -183,11 +201,6 @@ class NumpyEncoder(json.JSONEncoder):
 @app.route('/')
 @login_required
 def index():
-    # FIX #6: Only clear file-related keys, NEVER clear user/login state
-    if 'current_filepath' in session:
-        cleanup_uploaded_file(session.get('current_filepath'))
-        session.pop('current_filepath', None)
-    
     sample_datasets = [f for f in os.listdir(app.config['SAMPLE_DATASETS']) 
                       if allowed_file(f)]
     recent_datasets = list_dataset_records(session['user'])[:6]
@@ -218,10 +231,6 @@ def upload():
         if file and allowed_file(file.filename):
             filepath = None
             try:
-                # Clear any existing uploaded file
-                if 'current_filepath' in session:
-                    cleanup_uploaded_file(session.get('current_filepath'))
-                
                 # Create a safe filename
                 original_name = secure_filename(file.filename)
                 extension = file.filename.rsplit('.', 1)[1].lower()
@@ -495,7 +504,7 @@ def apply_dataset_transform():
             column_count=len(transformed_df.columns),
             parent_dataset_id=current_record['id'] if current_record else None,
             metadata={
-                'display_name': f"{current_record.get('metadata', {}).get('display_name', source_name) if current_record else source_name} · transformed",
+                'display_name': f"{current_record.get('metadata', {}).get('display_name', source_name) if current_record else source_name} / transformed",
                 'columns': transformed_df.columns.tolist(),
                 'transform_operation': operation,
                 'transform_description': description,
@@ -695,7 +704,8 @@ def activate_dataset(dataset_id):
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    if not session.get('current_filepath'):
+    filepath = session.get('current_filepath')
+    if not filepath or not os.path.exists(filepath):
         flash('Please upload a file or select a sample dataset first', 'error')
         return redirect(url_for('index'))
     current_dataset = None
@@ -821,26 +831,28 @@ def clear_session():
         if not validate_csrf_token():
             return error_response('Invalid request token', 400)
 
-        # Get the current filepath from session
         current_filepath = session.get('current_filepath')
-        
-        # If there's a file and it's in the uploads directory, delete it
-        cleanup_uploaded_file(current_filepath)
 
-        # Clear all files in the uploads directory that are older than 1 hour
+        # Clear generated exports in the uploads directory that are older than 1 hour.
+        # Tracked dataset files stay available so workspace links continue to work.
         current_time = time.time()
         for filename in os.listdir(app.config['UPLOAD_FOLDER']):
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             try:
                 if not is_path_within_directory(app.config['UPLOAD_FOLDER'], filepath):
                     continue
+                if is_tracked_dataset_path(session['user'], filepath):
+                    continue
                 if os.path.getctime(filepath) < (current_time - 3600):  # 3600 seconds = 1 hour
                     os.remove(filepath)
             except Exception as e:
                 print(f"Error removing old file {filename}: {str(e)}")
-        
-        # FIX #6: Only clear file-related keys, preserve login state
+
+        if current_filepath and not is_tracked_dataset_path(session['user'], current_filepath):
+            cleanup_uploaded_file(current_filepath)
+
         session.pop('current_filepath', None)
+        session.pop('current_dataset_id', None)
         
         return jsonify({'success': True, 'message': 'Session cleared successfully'})
     except Exception as e:

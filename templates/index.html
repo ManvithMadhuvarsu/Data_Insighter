@@ -40,9 +40,9 @@
         <div>
             <p class="workspace-label">Current Dataset</p>
             <h3>{{ current_dataset.metadata.display_name if current_dataset.metadata.display_name else current_dataset.source_name }}</h3>
-            <p>{{ current_dataset.row_count }} rows · {{ current_dataset.column_count }} columns · {{ current_dataset.source_type|title }}</p>
+            <p>{{ current_dataset.row_count }} rows / {{ current_dataset.column_count }} columns / {{ current_dataset.source_type|title }}</p>
         </div>
-        <a href="{{ url_for('analysis') }}" class="btn btn-primary">Continue Analysis</a>
+        <a href="{{ url_for('activate_dataset', dataset_id=current_dataset.id) }}" class="btn btn-primary">Continue Analysis</a>
     </div>
     {% endif %}
 
@@ -52,7 +52,7 @@
         <div class="workspace-card">
             <p class="workspace-label">{{ dataset.source_type|title }} Dataset</p>
             <h3>{{ dataset.metadata.display_name if dataset.metadata.display_name else dataset.source_name }}</h3>
-            <p>{{ dataset.row_count }} rows · {{ dataset.column_count }} columns</p>
+            <p>{{ dataset.row_count }} rows / {{ dataset.column_count }} columns</p>
             <a href="{{ url_for('activate_dataset', dataset_id=dataset.id) }}" class="btn btn-outline">Open Dataset</a>
         </div>
         {% endfor %}
@@ -198,11 +198,6 @@
 
 {% block scripts %}
 <script>
-    // Show welcome message on every visit to home page
-    document.addEventListener('DOMContentLoaded', function() {
-        showInfo('Welcome to Data Insighter!');
-    });
-
     document.querySelectorAll('.sample-link').forEach(link => {
         link.addEventListener('click', async (e) => {
             e.preventDefault();
@@ -275,6 +270,13 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     margin-bottom: 0.5rem;
+}
+
+@media (max-width: 768px) {
+    .workspace-current {
+        flex-direction: column;
+        align-items: flex-start;
+    }
 }
 </style>
 {% endblock %} 

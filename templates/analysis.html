@@ -18,9 +18,9 @@
             <p class="dataset-context">
                 Active dataset:
                 <strong>{{ dataset_record.metadata.display_name if dataset_record.metadata.display_name else dataset_record.source_name }}</strong>
-                · {{ dataset_record.row_count }} rows
-                · {{ dataset_record.column_count }} columns
-                · {{ dataset_record.source_type|title }}
+                / {{ dataset_record.row_count }} rows
+                / {{ dataset_record.column_count }} columns
+                / {{ dataset_record.source_type|title }}
             </p>
             {% endif %}
         </div>
@@ -885,7 +885,7 @@ function renderSemanticProfiles(profiles) {
     document.getElementById('semanticProfiles').innerHTML = profiles.slice(0, 10).map((profile) => `
         <div class="profile-card">
             <div class="card-title">${profile.name}</div>
-            <div class="semantic-pill">${profile.semantic_role} · ${profile.subtype}</div>
+            <div class="semantic-pill">${profile.semantic_role} / ${profile.subtype}</div>
             <div class="card-detail" style="margin-top:10px;">${profile.rationale.join(' ')}</div>
         </div>
     `).join('');

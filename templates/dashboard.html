@@ -577,9 +577,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     rerenderDashboardCharts();
                     showSuccess(`Cross-filtered dashboard by ${candidateColumn} = ${clickedValue}`);
                 });
+            } else {
+                const container = block.querySelector('.plot-container');
+                container.innerHTML = `<div class="library-empty">Chart failed to load: ${data.error || 'Unknown error'}</div>`;
             }
         } catch (error) {
             console.error('Error generating visualization:', error);
+            const container = block.querySelector('.plot-container');
+            if (container) {
+                container.innerHTML = `<div class="library-empty">Chart failed to load: ${error.message}</div>`;
+            }
         }
     }
 

@@ -14,7 +14,8 @@
 <div class="dashboard-container">
     <div class="dashboard-header">
         <div>
-            <h2>My Dashboard</h2>
+            <p class="dashboard-kicker">Workspace dashboard</p>
+            <h2>Build a board around the story in your data</h2>
             {% if dataset_record %}
             <p class="dashboard-subtitle">
                 Dataset:
@@ -28,6 +29,24 @@
             <button id="saveWorkspaceDashboard" class="btn btn-secondary">Save to Workspace</button>
             <button id="saveDashboard" class="btn btn-success">Save Dashboard</button>
             <button id="clearDashboard" class="btn btn-danger">Clear Dashboard</button>
+        </div>
+    </div>
+
+    <div class="dashboard-highlights">
+        <div class="dashboard-highlight-card">
+            <span>1</span>
+            <strong>Start from insight-ready visuals</strong>
+            <p>Use your saved analysis charts or generate a starter dashboard from detected signals.</p>
+        </div>
+        <div class="dashboard-highlight-card">
+            <span>2</span>
+            <strong>Shape the operating view</strong>
+            <p>Arrange charts, add commentary, and apply global filters to keep the story consistent.</p>
+        </div>
+        <div class="dashboard-highlight-card">
+            <span>3</span>
+            <strong>Export when the board is ready</strong>
+            <p>Save reusable dashboards to the workspace or download a polished view for sharing.</p>
         </div>
     </div>
 
@@ -70,13 +89,19 @@
     </div>
 
     <div id="dashboardArea" class="dashboard-area">
-        <!-- Visualization blocks will be added here -->
+        <div id="dashboardEmptyState" class="dashboard-empty-state">
+            <div class="empty-illustration"><i class="fas fa-chart-pie"></i></div>
+            <h3>Your dashboard canvas is ready</h3>
+            <p>Add a starter dashboard, save a chart from analysis, or load a workspace dashboard to begin composing a real decision view.</p>
+        </div>
         <div id="dashboardResizeHandle" class="dashboard-resize-handle"></div>
     </div>
 </div>
 
 <style>
 .dashboard-container {
+    max-width: 1380px;
+    margin: 0 auto;
     padding: 20px;
     overflow-x: auto;
     overflow-y: visible;
@@ -88,12 +113,59 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 18px;
     position: sticky;
     top: 0;
     z-index: 100;
-    background: white;
-    padding: 10px 0;
+    background: rgba(243, 247, 246, 0.92);
+    backdrop-filter: blur(14px);
+    padding: 14px 0;
+}
+
+.dashboard-kicker {
+    color: var(--primary-color);
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    margin-bottom: 0.35rem;
+}
+
+.dashboard-header h2 {
+    margin-bottom: 0.35rem;
+}
+
+.dashboard-highlights {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.dashboard-highlight-card {
+    padding: 18px;
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    box-shadow: 0 18px 34px rgba(15, 23, 42, 0.08);
+}
+
+.dashboard-highlight-card span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    margin-bottom: 0.9rem;
+    background: rgba(15, 118, 110, 0.12);
+    color: var(--primary-color);
+    font-weight: 800;
+}
+
+.dashboard-highlight-card strong {
+    display: block;
+    margin-bottom: 0.35rem;
 }
 
 .dashboard-subtitle {
@@ -102,19 +174,21 @@
 }
 
 .dashboard-library {
-    background: #fff;
-    border: 1px solid #eaecf0;
-    border-radius: 14px;
-    padding: 16px;
+    background: rgba(255, 255, 255, 0.84);
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    border-radius: 24px;
+    padding: 18px;
     margin-bottom: 18px;
+    box-shadow: 0 18px 34px rgba(15, 23, 42, 0.08);
 }
 
 .dashboard-filters {
-    background: #fff;
-    border: 1px solid #eaecf0;
-    border-radius: 14px;
-    padding: 16px;
+    background: rgba(255, 255, 255, 0.84);
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    border-radius: 24px;
+    padding: 18px;
     margin-bottom: 18px;
+    box-shadow: 0 18px 34px rgba(15, 23, 42, 0.08);
 }
 
 .filter-grid {
@@ -127,7 +201,8 @@
 .filter-grid input {
     padding: 10px 12px;
     border: 1px solid #d0d5dd;
-    border-radius: 10px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.95);
 }
 
 .library-header {
@@ -142,7 +217,8 @@
     min-width: 240px;
     padding: 10px 12px;
     border: 1px solid #d0d5dd;
-    border-radius: 10px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.95);
 }
 
 .dashboard-library-list {
@@ -152,10 +228,10 @@
 }
 
 .dashboard-library-item {
-    border: 1px solid #eaecf0;
-    border-radius: 12px;
+    border: 1px solid rgba(15, 118, 110, 0.08);
+    border-radius: 18px;
     padding: 12px 14px;
-    background: #fcfcfd;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(243, 247, 246, 0.92));
     min-width: 220px;
 }
 
@@ -173,34 +249,72 @@
     min-height: 600px;
     min-width: 100%;
     width: fit-content;
-    border: 2px dashed #ccc;
-    padding: 20px;
+    border: 2px dashed rgba(15, 118, 110, 0.24);
+    border-radius: 28px;
+    padding: 24px;
     position: relative;
     resize: none; /* We'll use interact.js for resizing */
     margin: 0 auto;
+    background:
+        linear-gradient(rgba(15, 118, 110, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15, 118, 110, 0.04) 1px, transparent 1px),
+        rgba(255, 255, 255, 0.52);
+    background-size: 28px 28px, 28px 28px, auto;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.dashboard-empty-state {
+    display: flex;
+    min-height: 420px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #667085;
+    padding: 2rem;
+}
+
+.dashboard-empty-state h3 {
+    margin: 1rem 0 0.5rem;
+}
+
+.dashboard-empty-state p {
+    max-width: 42ch;
+}
+
+.empty-illustration {
+    width: 74px;
+    height: 74px;
+    border-radius: 22px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, rgba(15, 118, 110, 0.14), rgba(249, 115, 22, 0.14));
+    color: var(--primary-color);
+    font-size: 1.8rem;
 }
 
 .viz-block {
     position: absolute;
-    background: white;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid rgba(15, 118, 110, 0.08);
+    border-radius: 20px;
+    box-shadow: 0 20px 36px rgba(15, 23, 42, 0.12);
     overflow: hidden;
 }
 
 .viz-header {
-    background: #f8f9fa;
-    padding: 8px;
-    border-bottom: 1px solid #ddd;
+    background: linear-gradient(180deg, rgba(244, 247, 250, 0.98), rgba(238, 244, 243, 0.96));
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(15, 118, 110, 0.08);
     cursor: move;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    font-weight: 700;
 }
 
 .viz-content {
-    padding: 10px;
+    padding: 12px;
     height: calc(100% - 40px);
 }
 
@@ -208,6 +322,23 @@
     color: #dc3545;
     cursor: pointer;
     padding: 4px;
+}
+
+.plot-container {
+    width: 100%;
+    height: 100%;
+}
+
+.plot-error {
+    height: 100%;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    text-align: center;
+    border-radius: 18px;
+    background: rgba(254, 242, 242, 0.92);
+    color: #b42318;
+    font-weight: 600;
 }
 
 .resize-handle {
@@ -229,8 +360,8 @@
     height: 20px;
     right: 0;
     bottom: 0;
-    background: #007bff;
-    border-radius: 4px 0 0 0;
+    background: linear-gradient(135deg, var(--primary-color), #14988f);
+    border-radius: 12px 0 24px 0;
     cursor: se-resize;
     z-index: 10;
 }
@@ -256,10 +387,10 @@
 
 .text-box {
     position: absolute;
-    background: transparent;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    background: rgba(255, 255, 255, 0.84);
+    border: 1px solid rgba(15, 118, 110, 0.08);
+    border-radius: 18px;
+    box-shadow: 0 20px 36px rgba(15, 23, 42, 0.12);
     padding: 10px;
     min-width: 100px;
     min-height: 50px;
@@ -268,9 +399,9 @@
 }
 
 .text-box-header {
-    background: #f8f9fa;
+    background: linear-gradient(180deg, rgba(244, 247, 250, 0.98), rgba(238, 244, 243, 0.96));
     padding: 8px;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid rgba(15, 118, 110, 0.08);
     cursor: move;
     display: flex;
     justify-content: space-between;
@@ -347,6 +478,10 @@
         align-items: flex-start;
     }
 
+    .dashboard-highlights {
+        grid-template-columns: 1fr;
+    }
+
     .header-buttons {
         flex-wrap: wrap;
     }
@@ -365,6 +500,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const dashboardArea = document.getElementById('dashboardArea');
+    const dashboardEmptyState = document.getElementById('dashboardEmptyState');
     const clearDashboardBtn = document.getElementById('clearDashboard');
     const dashboardLibraryList = document.getElementById('dashboardLibraryList');
     const dashboardNameInput = document.getElementById('dashboardName');
@@ -375,11 +511,50 @@ document.addEventListener('DOMContentLoaded', function() {
     const dateFilterEnd = document.getElementById('dateFilterEnd');
     const dashboardFilterStatus = document.getElementById('dashboardFilterStatus');
     let dashboardFilterState = JSON.parse(localStorage.getItem('dashboardFilterState') || '{}');
+
+    function normalizeViz(viz, index) {
+        return {
+            id: Number.isFinite(Number(viz?.id)) ? Number(viz.id) : Date.now() + index,
+            title: viz?.title || (viz?.type ? `${viz.type} Chart` : 'Saved chart'),
+            type: viz?.type || 'bar',
+            columns: Array.isArray(viz?.columns) ? viz.columns : [],
+            samplePercentage: viz?.samplePercentage ?? 100,
+            size: {
+                width: Math.max(260, Number(viz?.size?.width) || 420),
+                height: Math.max(240, Number(viz?.size?.height) || 320),
+            },
+            position: {
+                x: Math.max(0, Number(viz?.position?.x) || 24),
+                y: Math.max(0, Number(viz?.position?.y) || 24),
+            }
+        };
+    }
+
+    function getStoredDashboardViz() {
+        const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
+        return Array.isArray(dashboardViz) ? dashboardViz.map(normalizeViz) : [];
+    }
+
+    function persistDashboardViz(dashboardViz) {
+        localStorage.setItem('dashboardViz', JSON.stringify(dashboardViz));
+    }
+
+    function renderDashboardEmptyState() {
+        const hasCards = dashboardArea.querySelector('.viz-block, .text-box');
+        dashboardEmptyState.style.display = hasCards ? 'none' : 'flex';
+    }
+
+    function clearDashboardCanvas() {
+        dashboardArea.querySelectorAll('.viz-block, .text-box').forEach(element => element.remove());
+        renderDashboardEmptyState();
+    }
     
     // Load visualizations from localStorage
     function loadDashboard() {
-    const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
+        const dashboardViz = getStoredDashboardViz();
+        persistDashboardViz(dashboardViz);
         dashboardViz.forEach(viz => createVizBlock(viz));
+        renderDashboardEmptyState();
     }
 
     function saveFilterState() {
@@ -400,11 +575,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function rerenderDashboardCharts() {
-        dashboardArea.querySelectorAll('.viz-block, .text-box').forEach(element => {
-            if (element.classList.contains('viz-block')) {
-                element.remove();
-            }
-        });
+        dashboardArea.querySelectorAll('.viz-block').forEach(element => element.remove());
         loadDashboard();
     }
 
@@ -487,7 +658,7 @@ document.addEventListener('DOMContentLoaded', function() {
             dashboardFilterState = data.dashboard.dashboard_state || {};
             saveFilterState();
             await loadFilterOptions();
-            dashboardArea.querySelectorAll('.viz-block, .text-box').forEach(element => element.remove());
+            clearDashboardCanvas();
             loadDashboard();
             showSuccess('Saved dashboard loaded into the workspace.');
         } catch (error) {
@@ -497,17 +668,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Create a visualization block
     function createVizBlock(viz) {
+        const normalizedViz = normalizeViz(viz, 0);
         const block = document.createElement('div');
         block.className = 'viz-block';
-        block.id = `viz-${viz.id}`;
-        block.style.width = `${viz.size.width}px`;
-        block.style.height = `${viz.size.height}px`;
-        block.style.left = `${viz.position.x}px`;
-        block.style.top = `${viz.position.y}px`;
+        block.id = `viz-${normalizedViz.id}`;
+        block.style.width = `${normalizedViz.size.width}px`;
+        block.style.height = `${normalizedViz.size.height}px`;
+        block.style.left = `${normalizedViz.position.x}px`;
+        block.style.top = `${normalizedViz.position.y}px`;
 
         block.innerHTML = `
                 <div class="viz-header">
-                <span>${viz.title || `${viz.type} Chart`}</span>
+                <span>${normalizedViz.title}</span>
                 <span class="viz-remove">&times;</span>
                 </div>
             <div class="viz-content">
@@ -524,12 +696,13 @@ document.addEventListener('DOMContentLoaded', function() {
         makeDraggable(block);
         
         // Generate the visualization
-        generateVisualization(block, viz);
+        generateVisualization(block, normalizedViz);
         
         // Add remove functionality
         block.querySelector('.viz-remove').addEventListener('click', () => {
-            removeVizBlock(viz.id);
+            removeVizBlock(normalizedViz.id);
         });
+        renderDashboardEmptyState();
     }
 
     // Generate visualization for a block
@@ -554,8 +727,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const container = block.querySelector('.plot-container');
                 await Plotly.newPlot(container, data.visualization.data, {
                     ...data.visualization.layout,
-                    width: container.offsetWidth,
-                    height: container.offsetHeight
+                    width: container.offsetWidth || 360,
+                    height: container.offsetHeight || 260
                 });
                 container.on('plotly_click', (eventData) => {
                     const point = eventData?.points?.[0];
@@ -579,13 +752,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             } else {
                 const container = block.querySelector('.plot-container');
-                container.innerHTML = `<div class="library-empty">Chart failed to load: ${data.error || 'Unknown error'}</div>`;
+                container.innerHTML = `<div class="plot-error">Chart failed to load: ${data.error || 'Unknown error'}</div>`;
             }
         } catch (error) {
-            console.error('Error generating visualization:', error);
             const container = block.querySelector('.plot-container');
             if (container) {
-                container.innerHTML = `<div class="library-empty">Chart failed to load: ${error.message}</div>`;
+                container.innerHTML = `<div class="plot-error">Chart failed to load: ${error.message}</div>`;
             }
         }
     }
@@ -691,21 +863,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Update visualization size in localStorage
     function updateVizSize(id, width, height) {
-        const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
+        const dashboardViz = getStoredDashboardViz();
         const viz = dashboardViz.find(v => v.id === parseInt(id));
         if (viz) {
             viz.size = { width, height };
-            localStorage.setItem('dashboardViz', JSON.stringify(dashboardViz));
+            persistDashboardViz(dashboardViz);
         }
     }
 
     // Update visualization position in localStorage
     function updateVizPosition(id, x, y) {
-        const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
+        const dashboardViz = getStoredDashboardViz();
         const viz = dashboardViz.find(v => v.id === parseInt(id));
         if (viz) {
             viz.position = { x, y };
-            localStorage.setItem('dashboardViz', JSON.stringify(dashboardViz));
+            persistDashboardViz(dashboardViz);
         }
     }
 
@@ -714,18 +886,20 @@ document.addEventListener('DOMContentLoaded', function() {
         const block = document.getElementById(`viz-${id}`);
         if (block) {
             block.remove();
-        const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
-        const updatedViz = dashboardViz.filter(v => v.id !== id);
-        localStorage.setItem('dashboardViz', JSON.stringify(updatedViz));
+            const dashboardViz = getStoredDashboardViz();
+            const updatedViz = dashboardViz.filter(v => v.id !== id);
+            persistDashboardViz(updatedViz);
+            renderDashboardEmptyState();
+        }
     }
-}
 
     // Clear dashboard
     clearDashboardBtn.addEventListener('click', () => {
-    if (confirm('Are you sure you want to clear the dashboard?')) {
-        localStorage.removeItem('dashboardViz');
-            dashboardArea.querySelectorAll('.viz-block, .text-box').forEach(element => element.remove());
-    }
+        if (confirm('Are you sure you want to clear the dashboard?')) {
+            localStorage.removeItem('dashboardViz');
+            clearDashboardCanvas();
+            showInfo('Dashboard canvas cleared.');
+        }
     });
 
     // Initialize dashboard
@@ -1034,6 +1208,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         dashboardArea.appendChild(textBox);
+        renderDashboardEmptyState();
     });
 
     function dragMoveListener(event) {
@@ -1048,7 +1223,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Update the save dashboard function
     document.getElementById('saveWorkspaceDashboard').addEventListener('click', async function() {
-        const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
+        const dashboardViz = getStoredDashboardViz();
         const dashboardName = dashboardNameInput.value.trim();
 
         if (!dashboardName) {
@@ -1100,8 +1275,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!data.success) {
                 throw new Error(data.error || 'Could not generate a starter dashboard.');
             }
-            localStorage.setItem('dashboardViz', JSON.stringify(data.dashboard_viz));
-            dashboardArea.querySelectorAll('.viz-block, .text-box').forEach(element => element.remove());
+            persistDashboardViz((data.dashboard_viz || []).map(normalizeViz));
+            clearDashboardCanvas();
             loadDashboard();
             showSuccess('Starter dashboard generated from recommended insights.');
         } catch (error) {
@@ -1135,10 +1310,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     document.getElementById('saveDashboard').addEventListener('click', async function() {
-        const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
+        const dashboardViz = getStoredDashboardViz();
         
         if (dashboardViz.length === 0) {
-            alert('Please add at least one visualization to the dashboard before saving.');
+            showError('Please add at least one visualization to the dashboard before saving.');
             return;
         }
 
@@ -1287,13 +1462,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 a.click();
                     window.URL.revokeObjectURL(url);
                     a.remove();
-                modal.remove();
+                    modal.remove();
+                    showSuccess('Interactive dashboard exported.');
                 } else {
                     throw new Error('Failed to save dashboard');
                 }
             } catch (error) {
-                console.error('Error saving dashboard:', error);
-                alert('Failed to save dashboard: ' + error.message);
+                showError('Failed to save dashboard: ' + error.message);
             }
         });
 
@@ -1310,9 +1485,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 a.click();
                 a.remove();
                 modal.remove();
+                showSuccess('Dashboard image exported.');
             } catch (error) {
-                console.error('Error saving dashboard image:', error);
-                alert('Failed to save dashboard image: ' + error.message);
+                showError('Failed to save dashboard image: ' + error.message);
             }
         });
 

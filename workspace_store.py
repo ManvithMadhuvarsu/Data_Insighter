@@ -2,6 +2,7 @@ import json
 import os
 import re
 import secrets
+import tempfile
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -114,6 +115,29 @@ def _read_json(path: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _write_json_atomic(path: str, payload: Dict[str, Any]) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            'w',
+            encoding='utf-8',
+            dir=os.path.dirname(path),
+            delete=False,
+        ) as handle:
+            temp_path = handle.name
+            json.dump(payload, handle, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, path)
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
+
 def create_dataset_record(
     username: str,
     source_name: str,
@@ -141,8 +165,7 @@ def create_dataset_record(
         'metadata': metadata or {},
     }
 
-    with open(_dataset_path(username, dataset_id), 'w', encoding='utf-8') as handle:
-        json.dump(record, handle, indent=2)
+    _write_json_atomic(_dataset_path(username, dataset_id), record)
 
     return record
 
@@ -155,8 +178,7 @@ def update_dataset_record(username: str, dataset_id: str, updates: Dict[str, Any
     record.update(updates)
     record['updated_at'] = datetime.utcnow().isoformat() + 'Z'
 
-    with open(_dataset_path(username, dataset_id), 'w', encoding='utf-8') as handle:
-        json.dump(record, handle, indent=2)
+    _write_json_atomic(_dataset_path(username, dataset_id), record)
 
     return record
 
@@ -209,8 +231,7 @@ def create_dashboard_record(
         'dashboard_viz': dashboard_viz,
         'dashboard_state': dashboard_state or {},
     }
-    with open(_dashboard_path(username, dashboard_id), 'w', encoding='utf-8') as handle:
-        json.dump(record, handle, indent=2)
+    _write_json_atomic(_dashboard_path(username, dashboard_id), record)
     return record
 
 
@@ -257,8 +278,7 @@ def create_relationship_record(
         'created_at': now,
         'updated_at': now,
     }
-    with open(_relationship_path(username, relationship_id), 'w', encoding='utf-8') as handle:
-        json.dump(record, handle, indent=2)
+    _write_json_atomic(_relationship_path(username, relationship_id), record)
     return record
 
 
@@ -293,8 +313,7 @@ def create_measure_record(
         'created_at': now,
         'updated_at': now,
     }
-    with open(_measure_path(username, measure_id), 'w', encoding='utf-8') as handle:
-        json.dump(record, handle, indent=2)
+    _write_json_atomic(_measure_path(username, measure_id), record)
     return record
 
 

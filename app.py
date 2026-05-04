@@ -35,9 +35,35 @@ from measure_service import evaluate_measure
 # Load environment variables from .env file
 load_dotenv()
 
+LOCAL_SECRET_KEY_FILE = os.path.join(os.path.dirname(__file__), '.local_secret_key')
+
+
+def load_app_secret_key():
+    configured = os.environ.get('SECRET_KEY')
+    if configured:
+        return configured
+
+    if os.path.exists(LOCAL_SECRET_KEY_FILE):
+        try:
+            with open(LOCAL_SECRET_KEY_FILE, 'r', encoding='utf-8') as handle:
+                persisted = handle.read().strip()
+            if persisted:
+                return persisted
+        except OSError:
+            pass
+
+    generated = secrets.token_hex(32)
+    try:
+        with open(LOCAL_SECRET_KEY_FILE, 'w', encoding='utf-8') as handle:
+            handle.write(generated)
+    except OSError:
+        pass
+    return generated
+
+
 app = Flask(__name__)
-# FIX #1: Secret key from environment variable, never hardcoded
-app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+# FIX #1: Secret key from environment variable, otherwise a stable local fallback file
+app.secret_key = load_app_secret_key()
 
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  

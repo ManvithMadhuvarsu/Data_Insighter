@@ -12,6 +12,7 @@ import numpy as np
 from datetime import datetime
 import time
 import secrets
+import tempfile
 from file_utils import read_data_file
 from dotenv import load_dotenv
 from workspace_store import (
@@ -97,10 +98,33 @@ def _load_users():
             return {}
     return {}
 
+
+def _write_json_file_atomic(path, payload):
+    temp_path = None
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        with tempfile.NamedTemporaryFile(
+            'w',
+            encoding='utf-8',
+            dir=os.path.dirname(path),
+            delete=False,
+        ) as handle:
+            temp_path = handle.name
+            json.dump(payload, handle, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, path)
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
+
 def _save_users(users):
     """Save users to JSON file."""
-    with open(USERS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(users, f, indent=2)
+    _write_json_file_atomic(USERS_FILE, users)
 
 
 def _email_exists(users, email, exclude_username=None):

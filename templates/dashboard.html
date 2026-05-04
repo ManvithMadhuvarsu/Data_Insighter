@@ -11,7 +11,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="dashboard-container">
+<div class="dashboard-container" data-dashboard-scope="{{ session.get('user', 'anonymous') }}:{{ dataset_record.id if dataset_record else 'active' }}">
     <div class="dashboard-header">
         <div>
             <p class="dashboard-kicker">Workspace dashboard</p>
@@ -500,6 +500,9 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const dashboardArea = document.getElementById('dashboardArea');
+    const dashboardScope = document.querySelector('.dashboard-container')?.dataset.dashboardScope || 'default';
+    const dashboardVizStorageKey = `dashboardViz:${dashboardScope}`;
+    const dashboardFilterStorageKey = `dashboardFilterState:${dashboardScope}`;
     const dashboardEmptyState = document.getElementById('dashboardEmptyState');
     const clearDashboardBtn = document.getElementById('clearDashboard');
     const dashboardLibraryList = document.getElementById('dashboardLibraryList');
@@ -510,7 +513,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const dateFilterStart = document.getElementById('dateFilterStart');
     const dateFilterEnd = document.getElementById('dateFilterEnd');
     const dashboardFilterStatus = document.getElementById('dashboardFilterStatus');
-    let dashboardFilterState = JSON.parse(localStorage.getItem('dashboardFilterState') || '{}');
+    let dashboardFilterState = JSON.parse(localStorage.getItem(dashboardFilterStorageKey) || '{}');
 
     function normalizeViz(viz, index) {
         return {
@@ -531,12 +534,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function getStoredDashboardViz() {
-        const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
+        const dashboardViz = JSON.parse(localStorage.getItem(dashboardVizStorageKey) || '[]');
         return Array.isArray(dashboardViz) ? dashboardViz.map(normalizeViz) : [];
     }
 
     function persistDashboardViz(dashboardViz) {
-        localStorage.setItem('dashboardViz', JSON.stringify(dashboardViz));
+        localStorage.setItem(dashboardVizStorageKey, JSON.stringify(dashboardViz));
     }
 
     function renderDashboardEmptyState() {
@@ -558,7 +561,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function saveFilterState() {
-        localStorage.setItem('dashboardFilterState', JSON.stringify(dashboardFilterState));
+        localStorage.setItem(dashboardFilterStorageKey, JSON.stringify(dashboardFilterState));
         const parts = [];
         if (dashboardFilterState.column && dashboardFilterState.value && dashboardFilterState.value !== '__all__') {
             parts.push(`${dashboardFilterState.column} = ${dashboardFilterState.value}`);
@@ -654,7 +657,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error(data.error || 'Dashboard not found');
             }
 
-            localStorage.setItem('dashboardViz', JSON.stringify(data.dashboard.dashboard_viz || []));
+            localStorage.setItem(dashboardVizStorageKey, JSON.stringify(data.dashboard.dashboard_viz || []));
             dashboardFilterState = data.dashboard.dashboard_state || {};
             saveFilterState();
             await loadFilterOptions();
@@ -896,7 +899,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Clear dashboard
     clearDashboardBtn.addEventListener('click', () => {
         if (confirm('Are you sure you want to clear the dashboard?')) {
-            localStorage.removeItem('dashboardViz');
+            localStorage.removeItem(dashboardVizStorageKey);
+            localStorage.removeItem(dashboardFilterStorageKey);
             clearDashboardCanvas();
             showInfo('Dashboard canvas cleared.');
         }

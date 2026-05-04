@@ -8,7 +8,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="analysis-shell">
+<div class="analysis-shell" data-dashboard-scope="{{ session.get('user', 'anonymous') }}:{{ dataset_record.id if dataset_record else 'active' }}">
     <section class="insight-header">
         <div>
             <p class="eyebrow">Analyst Workspace</p>
@@ -1353,6 +1353,8 @@ async function addCurrentVisualizationToDashboard() {
     const columns = selectedColumns();
     const type = document.getElementById('chartType').value;
     const samplePercentage = parseInt(document.getElementById('dataSamplePercentage').value, 10);
+    const dashboardScope = document.querySelector('.analysis-shell')?.dataset.dashboardScope || 'default';
+    const dashboardVizStorageKey = `dashboardViz:${dashboardScope}`;
 
     if (!columns.length || !type || !currentPlot) {
         showError('Generate a visualization before adding it to the dashboard.');
@@ -1360,7 +1362,7 @@ async function addCurrentVisualizationToDashboard() {
     }
 
     const chartTitle = currentChartMeta?.title || `${type} chart`;
-    const dashboardViz = JSON.parse(localStorage.getItem('dashboardViz') || '[]');
+    const dashboardViz = JSON.parse(localStorage.getItem(dashboardVizStorageKey) || '[]');
     dashboardViz.push({
         id: Date.now(),
         title: chartTitle,
@@ -1370,7 +1372,7 @@ async function addCurrentVisualizationToDashboard() {
         position: { x: 0, y: 0 },
         size: { width: 420, height: 320 }
     });
-    localStorage.setItem('dashboardViz', JSON.stringify(dashboardViz));
+    localStorage.setItem(dashboardVizStorageKey, JSON.stringify(dashboardViz));
     showSuccess('Visualization added to dashboard.');
     setTimeout(() => {
         window.location.href = '/dashboard';

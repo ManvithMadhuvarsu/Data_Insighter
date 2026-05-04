@@ -1,118 +1,95 @@
-# Data Insighter 📊
+# Data Insighter
 
-**Data Insighter** is a professional-grade, full-stack data analysis and visualization platform. It empowers users to transform raw datasets into actionable insights through an intuitive web interface, advanced statistical processing, and high-fidelity interactive dashboards.
+Data Insighter is a Flask-based data analysis workspace for uploading CSV/JSON datasets, profiling them, generating Plotly visualizations, creating saved dashboards, and exporting insight summaries.
 
----
+## What the app currently does
 
-## 🚀 Key Features
+- User registration and login with hashed passwords and CSRF protection
+- Upload CSV and JSON files
+- Load bundled sample datasets
+- Generate dataset summaries, semantic profiles, quality alerts, and executive takeaways
+- Apply lightweight transforms such as deduplication, text trimming, missing-value filling, date-part extraction, and calculated columns
+- Suggest relationships across uploaded datasets and create joined datasets
+- Define reusable business measures
+- Build dashboard layouts from analysis charts and export dashboards as interactive HTML or PNG
+- Export executive reports as HTML or Markdown
 
-- **Multi-Format Data Support**: Seamlessly upload and process `.csv` and `.json` files.
-- **Automated Data Profiling**: Instantly view column summaries, null counts, unique values, and data types upon upload.
-- **Interactive Visualization Engine**: Generate dynamic charts (Bar, Line, Scatter, Heatmaps, etc.) using Plotly, Chart.js, and Bokeh.
-- **Advanced Analytics**: Built-in support for statistical analysis, survival analysis, and Bayesian modeling.
-- **Secure Authentication**: Robust user management system with hashed passwords and CSRF protection.
-- **High-Fidelity Exports**: Export individual visualizations or entire dashboards as high-resolution images or interactive HTML files.
-- **Sample Datasets**: Built-in sample datasets (e.g., Global Superstore) for immediate exploration.
+## Current architecture
 
----
+Backend modules:
 
-## 🛠️ Tech Stack
+- `app.py` - Flask routes, auth, session flow, export flow
+- `data_processor.py` - dataset profiling and insight summary orchestration
+- `insight_engine.py` - anomaly, contribution, funnel, cohort, seasonality, and variance insights
+- `semantic_model.py` - semantic role inference for columns
+- `data_model_service.py` - key profiling, relationship suggestions, and joins
+- `measure_service.py` - reusable measure calculations
+- `transform_service.py` - dataset transformation operations
+- `visualization_generator.py` - Plotly chart generation and export
+- `workspace_store.py` - JSON-backed persistence for datasets, dashboards, relationships, and measures
+- `report_service.py` - executive summary report generation
+- `file_utils.py` - CSV/JSON loading with encoding handling
 
-### Backend
-- **Framework**: Flask (Python)
-- **Data Processing**: Pandas, NumPy, Scipy
-- **Machine Learning & Stats**: Scikit-learn, Statsmodels, Pingouin, Lifelines
-- **Security**: Werkzeug (Hashing), Dotenv, Flask-Session, CSRF protection
+Frontend surface:
 
-### Frontend
-- **Structure**: Semantic HTML5
-- **Styling**: Modern, responsive Vanilla CSS
-- **Interactivity**: JavaScript (ES6+), Chart.js
-- **Visualization**: Plotly, Bokeh, Altair
+- `templates/` - Jinja views for home, upload, analysis, dashboard, auth, and export HTML
+- `static/css/` - shared, upload, and analysis styling
+- `static/js/upload.js` - upload and sample-dataset client flow
 
-### Infrastructure
-- **Version Control**: Git / GitHub
-- **Deployment Ready**: Gunicorn / Procfile included
-- **Background Tasks**: Celery & Redis (support built-in)
+## Data storage model
 
----
+- Uploaded files are stored under `uploads/`
+- Sample files live under `sample_datasets/`
+- Workspace records are stored as JSON files under `workspace_data/`
+- The app uses Flask session cookies plus server-side workspace files
+- If `SECRET_KEY` is not set, the app creates a stable local fallback key in `.local_secret_key`
 
-## ⚙️ Installation & Setup
+## Supported file types
 
-### Prerequisites
-- Python 3.8+
-- Git
+- `.csv`
+- `.json`
 
-### Steps
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/ManvithMadhuvarsu/Data_Insighter.git
-   cd Data_Insighter
-   ```
+## Local development
 
-2. **Create a virtual environment**:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+1. Create and activate a virtual environment.
+2. Install dependencies with `pip install -r requirements.txt`.
+3. Optionally create a `.env` file with:
 
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Environment Variables**:
-   Create a `.env` file in the root directory:
-   ```env
-   SECRET_KEY=your_super_secret_key_here
-   ```
-
-5. **Run the application**:
-   ```bash
-   python app.py
-   ```
-   Access the app at `http://127.0.0.1:5000`
-
----
-
-## 🔒 Security & Recent Updates
-
-Recent updates have focused on hardening the application for production use:
-- **CSRF Protection**: All forms and API requests are now protected against Cross-Site Request Forgery.
-- **Secure Authentication**: Switched to PBKDF2 hashing for user passwords.
-- **Session Management**: Server-side session handling to prevent sensitive data leakage.
-- **Path Validation**: Strict validation for file paths to prevent directory traversal attacks.
-- **Dashboard Optimization**: Improved scaling and text legibility for exported visualizations.
-
----
-
-## 📁 Project Structure
-
-```text
-Data_Insighter/
-├── app.py                # Main Flask entry point
-├── data_processor.py      # Core data manipulation logic
-├── visualization_generator.py # Chart & Dashboard logic
-├── file_utils.py          # File I/O utilities
-├── uploads/               # Temporary user data (volatile)
-├── sample_datasets/       # Included datasets for testing
-├── static/                # Modern CSS and JS assets
-├── templates/             # HTML Jinja2 templates
-└── requirements.txt       # Project dependencies
+```env
+SECRET_KEY=your_secret_key_here
 ```
 
----
+4. Start the app with:
 
-## 📜 License
+```bash
+python app.py
+```
 
-This project is licensed under the MIT License - see the LICENSE file for details (if available).
+5. Open `http://127.0.0.1:5000`.
 
----
+PowerShell helpers:
 
-## 🤝 Contributing
+- `scripts/start_local_server.ps1`
+- `scripts/tail_local_logs.ps1`
 
-Contributions are welcome! Please feel free to submit a Pull Request or open an issue for any bugs or feature requests.
+## Tests
 
----
+Run the current automated tests with:
 
-*Developed with ❤️ by [Manvith Madhuvarsu](https://github.com/ManvithMadhuvarsu)*
+```bash
+python -m pytest -q
+```
+
+The current suite covers:
+
+- measure calculations
+- relationship/key profiling
+- advanced insight helpers
+- report HTML escaping
+- auth edge cases around duplicate emails and email login
+
+## Notes
+
+- Dashboard browser state is scoped by user and active dataset.
+- Exported report and dashboard HTML is escaped to avoid embedding executable markup from uploaded data.
+- Workspace persistence is currently file-backed, not database-backed.

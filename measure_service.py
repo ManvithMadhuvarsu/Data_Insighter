@@ -48,12 +48,13 @@ def evaluate_measure(df: pd.DataFrame, definition: Dict[str, Any]) -> Dict[str, 
             'date': _datetime(df, date_column),
             'metric': _numeric(df, metric),
         }).dropna().sort_values('date')
-        if len(working) < 2:
-            raise ValueError('Growth percentage requires at least two dated metric values.')
-        first = float(working['metric'].iloc[0])
-        last = float(working['metric'].iloc[-1])
+        period_totals = working.groupby('date')['metric'].sum().sort_index()
+        if len(period_totals) < 2:
+            raise ValueError('Growth percentage requires at least two dated metric periods.')
+        first = float(period_totals.iloc[0])
+        last = float(period_totals.iloc[-1])
         value = float(((last - first) / abs(first)) * 100) if first else np.nan
-        explanation = 'Growth percentage compares the earliest and latest observed metric values.'
+        explanation = 'Growth percentage compares the earliest and latest dated metric totals after grouping duplicate timestamps.'
 
     elif measure_type == 'rolling_average':
         metric = definition.get('metric')
@@ -65,9 +66,10 @@ def evaluate_measure(df: pd.DataFrame, definition: Dict[str, Any]) -> Dict[str, 
         }).dropna().sort_values('date')
         if working.empty:
             raise ValueError('Rolling average requires usable dated metric values.')
-        rolling = working['metric'].rolling(window=min(window, len(working))).mean()
+        period_totals = working.groupby('date')['metric'].sum().sort_index()
+        rolling = period_totals.rolling(window=min(window, len(period_totals))).mean()
         value = float(rolling.dropna().iloc[-1])
-        explanation = f'Rolling average uses the latest {window}-row moving average after sorting by date.'
+        explanation = f'Rolling average uses dated metric totals and then applies the latest {window}-period moving average.'
 
     elif measure_type == 'period_change':
         metric = definition.get('metric')

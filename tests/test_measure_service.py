@@ -51,3 +51,40 @@ def test_period_change_compares_latest_period_to_previous():
     })
 
     assert result['value'] == 50
+
+
+def test_growth_pct_uses_period_totals_not_row_order():
+    df = pd.DataFrame({
+        'date': pd.to_datetime(['2026-01-01', '2026-01-01', '2026-02-01', '2026-02-01']),
+        'revenue': [20, 80, 40, 110],
+    })
+
+    result = evaluate_measure(df, {
+        'name': 'Growth',
+        'type': 'growth_pct',
+        'metric': 'revenue',
+        'date_column': 'date',
+    })
+
+    assert result['value'] == 50
+
+
+def test_rolling_average_uses_grouped_dated_totals():
+    df = pd.DataFrame({
+        'date': pd.to_datetime([
+            '2026-01-01', '2026-01-01',
+            '2026-01-02', '2026-01-02',
+            '2026-01-03', '2026-01-03',
+        ]),
+        'revenue': [5, 15, 10, 10, 20, 10],
+    })
+
+    result = evaluate_measure(df, {
+        'name': 'Rolling revenue',
+        'type': 'rolling_average',
+        'metric': 'revenue',
+        'date_column': 'date',
+        'window': 2,
+    })
+
+    assert result['value'] == 25

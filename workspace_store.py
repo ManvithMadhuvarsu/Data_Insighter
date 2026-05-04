@@ -42,6 +42,19 @@ def _list_user_dataset_files(username: str) -> List[str]:
     ]
 
 
+def _list_all_dataset_files() -> List[str]:
+    ensure_workspace_dirs()
+    records: List[str] = []
+    if not os.path.exists(DATASETS_DIR):
+        return records
+
+    for root, _, filenames in os.walk(DATASETS_DIR):
+        for filename in filenames:
+            if filename.endswith('.json'):
+                records.append(os.path.join(root, filename))
+    return records
+
+
 def _dashboard_path(username: str, dashboard_id: str) -> str:
     user_dir = os.path.join(DASHBOARDS_DIR, _safe_user_segment(username))
     os.makedirs(user_dir, exist_ok=True)
@@ -157,6 +170,18 @@ def list_dataset_records(username: str) -> List[Dict[str, Any]]:
     ensure_workspace_dirs()
     records = []
     for path in _list_user_dataset_files(username):
+        record = _read_json(path)
+        if record:
+            records.append(record)
+
+    records.sort(key=lambda item: item.get('updated_at', ''), reverse=True)
+    return records
+
+
+def list_all_dataset_records() -> List[Dict[str, Any]]:
+    ensure_workspace_dirs()
+    records = []
+    for path in _list_all_dataset_files():
         record = _read_json(path)
         if record:
             records.append(record)

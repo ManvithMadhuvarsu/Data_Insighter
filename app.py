@@ -21,6 +21,7 @@ from workspace_store import (
     ensure_workspace_dirs,
     get_dashboard_record,
     get_dataset_record,
+    list_all_dataset_records,
     list_dashboard_records,
     list_dataset_records,
     list_measure_records,
@@ -126,6 +127,19 @@ def is_tracked_dataset_path(username, filepath):
 
     normalized = os.path.abspath(filepath)
     for dataset in list_dataset_records(username):
+        stored_path = dataset.get('stored_path')
+        if stored_path and os.path.abspath(stored_path) == normalized:
+            return True
+    return False
+
+
+def is_any_tracked_dataset_path(filepath):
+    """Return True when the path belongs to any saved dataset record."""
+    if not filepath:
+        return False
+
+    normalized = os.path.abspath(filepath)
+    for dataset in list_all_dataset_records():
         stored_path = dataset.get('stored_path')
         if stored_path and os.path.abspath(stored_path) == normalized:
             return True
@@ -841,14 +855,14 @@ def clear_session():
             try:
                 if not is_path_within_directory(app.config['UPLOAD_FOLDER'], filepath):
                     continue
-                if is_tracked_dataset_path(session['user'], filepath):
+                if is_any_tracked_dataset_path(filepath):
                     continue
                 if os.path.getctime(filepath) < (current_time - 3600):  # 3600 seconds = 1 hour
                     os.remove(filepath)
             except Exception as e:
                 print(f"Error removing old file {filename}: {str(e)}")
 
-        if current_filepath and not is_tracked_dataset_path(session['user'], current_filepath):
+        if current_filepath and not is_any_tracked_dataset_path(current_filepath):
             cleanup_uploaded_file(current_filepath)
 
         session.pop('current_filepath', None)

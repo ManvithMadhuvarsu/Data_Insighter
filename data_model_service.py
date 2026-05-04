@@ -1,5 +1,6 @@
 from difflib import SequenceMatcher
 from typing import Any, Dict, List
+import warnings
 
 import pandas as pd
 
@@ -8,6 +9,27 @@ from file_utils import read_data_file
 
 def _safe_series(df: pd.DataFrame, column: str) -> pd.Series:
     return df[column].dropna().astype(str).str.strip()
+
+
+def _normalized_join_key(series: pd.Series) -> pd.Series:
+    non_null = series.dropna()
+    if non_null.empty:
+        return series
+
+    stringified = non_null.astype(str).str.strip()
+    numeric_values = pd.to_numeric(stringified, errors='coerce')
+    if numeric_values.notna().mean() >= 0.9:
+        return pd.to_numeric(series.astype(str).str.strip(), errors='coerce')
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        datetime_values = pd.to_datetime(stringified, errors='coerce')
+    if datetime_values.notna().mean() >= 0.9:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', UserWarning)
+            return pd.to_datetime(series, errors='coerce')
+
+    return series.map(lambda value: None if pd.isna(value) else str(value).strip())
 
 
 def profile_key_candidates(df: pd.DataFrame) -> List[Dict[str, Any]]:
@@ -130,12 +152,20 @@ def join_datasets(
     if right_key not in right_df.columns:
         raise ValueError(f"Right key '{right_key}' was not found.")
 
+    left_working = left_df.copy()
+    right_working = right_df.copy()
+    left_join_key = '__normalized_left_join_key__'
+    right_join_key = '__normalized_right_join_key__'
+    left_working[left_join_key] = _normalized_join_key(left_working[left_key])
+    right_working[right_join_key] = _normalized_join_key(right_working[right_key])
+
     joined = pd.merge(
-        left_df,
-        right_df,
+        left_working,
+        right_working,
         how=join_type,
-        left_on=left_key,
-        right_on=right_key,
+        left_on=left_join_key,
+        right_on=right_join_key,
         suffixes=('', '_related'),
     )
+    joined = joined.drop(columns=[left_join_key, right_join_key], errors='ignore')
     return joined.reset_index(drop=True)

@@ -25,6 +25,7 @@
             {% endif %}
         </div>
         <div class="header-actions">
+            <button id="refreshDatasetVersion" class="btn btn-primary">Refresh Dataset</button>
             <button id="refreshInsights" class="btn btn-secondary">Refresh Insights</button>
             <button id="loadExecutiveReport" class="btn btn-secondary">Generate Report</button>
             <a href="{{ url_for('dashboard') }}" class="btn btn-outline">Open Dashboard</a>
@@ -1093,6 +1094,26 @@ async function rebuildCurrentPipeline() {
     window.location.href = '/analysis';
 }
 
+async function refreshActiveDatasetVersion() {
+    if (!currentDatasetId) {
+        showError('No active dataset version is selected.');
+        return;
+    }
+    const response = await fetch(`/datasets/${currentDatasetId}/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
+        })
+    });
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Could not refresh the active dataset.');
+    }
+    showSuccess(data.message);
+    window.location.reload();
+}
+
 function renderReportPreview(report) {
     currentReport = report;
     document.getElementById('reportPreview').innerHTML = report.sections.map((section) => `
@@ -1611,6 +1632,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             await loadAnalysisSummary();
             await loadGovernanceSummary();
             showSuccess('Insights refreshed from the current dataset.');
+        } catch (error) {
+            showError(error.message);
+        }
+    });
+    document.getElementById('refreshDatasetVersion').addEventListener('click', async () => {
+        try {
+            await refreshActiveDatasetVersion();
         } catch (error) {
             showError(error.message);
         }

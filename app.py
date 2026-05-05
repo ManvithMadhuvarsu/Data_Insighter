@@ -14,6 +14,7 @@ import time
 import secrets
 import tempfile
 from dataset_pipeline_service import build_dataset_from_record, dataset_pipeline_steps, supports_pipeline_rebuild
+from dataset_refresh_service import dataset_freshness, refresh_dataset_frame, schema_changes, schema_snapshot
 from file_utils import SUPPORTED_EXTENSIONS, read_data_file
 from governance_service import build_governance_summary
 from dotenv import load_dotenv
@@ -25,6 +26,7 @@ from workspace_store import (
     ensure_workspace_dirs,
     get_dashboard_record,
     get_dataset_record,
+    update_dataset_record,
     list_audit_events,
     list_all_dataset_records,
     list_dashboard_records,
@@ -385,6 +387,8 @@ def upload():
                         file.filename,
                         df.columns.tolist(),
                         {
+                            'last_refreshed_at': datetime.utcnow().isoformat() + 'Z',
+                            'schema_snapshot': schema_snapshot(df),
                             'source_extension': extension,
                         },
                     ),
@@ -452,7 +456,7 @@ def upload():
                 cleanup_uploaded_file(filepath)
                 return error_response(str(e), 400)
 
-        return error_response('Unsupported file format. Please upload a CSV or JSON file.', 400)
+        return error_response('Unsupported file format. Please upload CSV, TSV, JSON, Excel, or Parquet data.', 400)
     
     # Get list of sample datasets for the template
     sample_datasets = [f for f in os.listdir(app.config['SAMPLE_DATASETS']) 
@@ -484,6 +488,8 @@ def use_sample(filename):
                     filename,
                     df.columns.tolist(),
                     {
+                        'last_refreshed_at': datetime.utcnow().isoformat() + 'Z',
+                        'schema_snapshot': schema_snapshot(df),
                         'source_extension': filename.rsplit('.', 1)[1].lower(),
                     },
                 ),
@@ -689,6 +695,8 @@ def apply_dataset_transform():
                 f"{current_metadata.get('display_name', source_name) if current_record else source_name} / transformed",
                 transformed_df.columns.tolist(),
                 {
+                    'last_refreshed_at': datetime.utcnow().isoformat() + 'Z',
+                    'schema_snapshot': schema_snapshot(transformed_df),
                     'transform_operation': operation,
                     'transform_description': description,
                     'lineage_steps': parent_lineage + [lineage_step],
@@ -810,6 +818,8 @@ def rebuild_dataset(dataset_id):
                 f"{record_metadata.get('display_name', source_name)} / rebuilt",
                 rebuilt_df.columns.tolist(),
                 {
+                    'last_refreshed_at': datetime.utcnow().isoformat() + 'Z',
+                    'schema_snapshot': schema_snapshot(rebuilt_df),
                     'pipeline_steps': record_metadata.get('pipeline_steps', []),
                     'lineage_steps': record_metadata.get('lineage_steps', []) + [rebuild_step],
                     'rebuilt_from_dataset_id': record['id'],
@@ -836,6 +846,123 @@ def rebuild_dataset(dataset_id):
         })
     except Exception as e:
         return error_response(str(e), 400)
+
+
+@app.route('/datasets/<dataset_id>/refresh', methods=['POST'])
+@login_required
+def refresh_dataset(dataset_id):
+    if not validate_csrf_token():
+        return error_response('Invalid request token', 400)
+
+    record = get_dataset_record(session['user'], dataset_id)
+    if not record:
+        return error_response('Dataset not found in your workspace.', 404)
+
+    try:
+        refreshed_df = refresh_dataset_frame(session['user'], record)
+        if refreshed_df.empty:
+            return error_response('The refreshed dataset is empty, so the refresh was cancelled.', 400)
+
+        metadata = record.get('metadata', {}).copy()
+        diff = schema_changes(metadata.get('schema_snapshot'), refreshed_df)
+        refreshed_path = record['stored_path']
+        old_path = record.get('stored_path')
+
+        if record.get('source_type') not in {'upload', 'sample'}:
+            refreshed_path, _ = store_derived_dataset(
+                refreshed_df,
+                metadata.get('display_name') or record.get('source_name') or 'dataset',
+            )
+
+        refresh_event = {
+            'operation': 'refresh_dataset',
+            'kind': 'system',
+            'description': f"Refreshed dataset materialization with {len(refreshed_df)} rows and {len(refreshed_df.columns)} columns.",
+            'created_at': datetime.utcnow().isoformat() + 'Z',
+        }
+        refresh_history = (metadata.get('refresh_history') or [])[-9:] + [refresh_event]
+        updated_metadata = {
+            **metadata,
+            'columns': refreshed_df.columns.tolist(),
+            'schema_snapshot': diff['current'],
+            'last_refreshed_at': datetime.utcnow().isoformat() + 'Z',
+            'last_schema_change': {
+                'added_columns': diff['added_columns'],
+                'removed_columns': diff['removed_columns'],
+                'changed_types': diff['changed_types'],
+            },
+            'refresh_history': refresh_history,
+            'lineage_steps': metadata.get('lineage_steps', []) + [refresh_event],
+        }
+        updated_record = update_dataset_record(
+            session['user'],
+            dataset_id,
+            {
+                'stored_path': refreshed_path,
+                'row_count': len(refreshed_df),
+                'column_count': len(refreshed_df.columns),
+                'metadata': updated_metadata,
+            },
+        )
+        if not updated_record:
+            return error_response('Could not persist refreshed dataset metadata.', 500)
+
+        if (
+            old_path
+            and old_path != refreshed_path
+            and is_path_within_directory(app.config['UPLOAD_FOLDER'], old_path)
+            and os.path.exists(old_path)
+        ):
+            cleanup_uploaded_file(old_path)
+
+        session['current_dataset_id'] = updated_record['id']
+        session['current_filepath'] = updated_record['stored_path']
+        record_audit_event(
+            'dataset_refreshed',
+            dataset_id=updated_record['id'],
+            artifact_id=updated_record['id'],
+            details={
+                'added_columns': diff['added_columns'],
+                'removed_columns': diff['removed_columns'],
+                'changed_type_count': len(diff['changed_types']),
+            },
+        )
+
+        processor = DataProcessor(updated_record['stored_path'])
+        return jsonify({
+            'success': True,
+            'message': 'Dataset refreshed from its latest source definition.',
+            'dataset': updated_record,
+            'schema_changes': {
+                'added_columns': diff['added_columns'],
+                'removed_columns': diff['removed_columns'],
+                'changed_types': diff['changed_types'],
+            },
+            'summary': processor.get_analysis_summary(),
+        })
+    except Exception as e:
+        return error_response(str(e), 400)
+
+
+@app.route('/workspace_catalog')
+@login_required
+def workspace_catalog():
+    datasets = []
+    for record in list_dataset_records(session['user']):
+        freshness = dataset_freshness(session['user'], record)
+        datasets.append({
+            'id': record['id'],
+            'display_name': record.get('metadata', {}).get('display_name', record['source_name']),
+            'source_type': record.get('source_type'),
+            'row_count': record.get('row_count'),
+            'column_count': record.get('column_count'),
+            'updated_at': record.get('updated_at'),
+            'last_refreshed_at': record.get('metadata', {}).get('last_refreshed_at'),
+            'pipeline_step_count': len(record.get('metadata', {}).get('pipeline_steps', [])),
+            'freshness': freshness,
+            'source_available': bool(record.get('stored_path') and os.path.exists(record['stored_path'])),
+        })
+    return jsonify({'success': True, 'datasets': datasets})
 
 @app.route('/data_model')
 @login_required
@@ -945,6 +1072,8 @@ def create_joined_dataset():
                 f'{left_name} joined with {right_name}',
                 joined_df.columns.tolist(),
                 {
+                    'last_refreshed_at': datetime.utcnow().isoformat() + 'Z',
+                    'schema_snapshot': schema_snapshot(joined_df),
                     'join': {
                         'left_dataset_id': left_record['id'],
                         'left_column': payload.get('left_column'),

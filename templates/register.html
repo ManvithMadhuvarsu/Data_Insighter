@@ -4,6 +4,30 @@
 
 {% block content %}
 <section class="auth-shell">
+    <div class="auth-shell-split">
+    <div class="auth-story">
+    <p class="metric-label">Create Workspace</p>
+    <h1 class="auth-display">Launch a modern analytics workspace</h1>
+    <p class="auth-story-copy">Create an account to start profiling data, saving report snapshots, building dashboards, and shaping reusable business metrics in one shared flow.</p>
+    <div class="auth-benefits">
+        <div class="auth-benefit">
+            <strong>Upload and model</strong>
+            <span>Bring in real files, shape them, and connect datasets through the workspace model.</span>
+        </div>
+        <div class="auth-benefit">
+            <strong>Explainable insights</strong>
+            <span>Turn semantic fields and governed measures into decisions your team can trust.</span>
+        </div>
+        <div class="auth-benefit">
+            <strong>Reusable outputs</strong>
+            <span>Save dashboards and narrative reports instead of regenerating work each time.</span>
+        </div>
+        <div class="auth-benefit">
+            <strong>Built for analysts</strong>
+            <span>Go from prep to visuals to export without losing context in separate tools.</span>
+        </div>
+    </div>
+    </div>
     <div class="auth-card">
     <h2 class="auth-title">Register</h2>
     <form method="POST" action="/register" class="auth-form">
@@ -29,6 +53,7 @@
         <button type="submit" class="btn btn-primary auth-submit">Register</button>
     </form>
     <p class="auth-footer">Already have an account? <a href="{{ url_for('login') }}">Login here</a></p>
+    </div>
     </div>
 </section>
 {% endblock %}

@@ -758,9 +758,67 @@ th {
     padding: 2rem 1rem;
 }
 
+.auth-shell-split {
+    width: min(1180px, 100%);
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(340px, 460px);
+    gap: 1.2rem;
+    align-items: stretch;
+}
+
+.auth-story {
+    padding: 2.2rem;
+    border-radius: 28px;
+    background: var(--bg-canvas);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--soft-shadow);
+    backdrop-filter: var(--panel-blur);
+}
+
+.auth-display {
+    font-size: clamp(2.4rem, 5vw, 4.1rem);
+    margin-bottom: 1rem;
+    max-width: 10ch;
+}
+
+.auth-story-copy {
+    color: var(--text-light);
+    max-width: 52ch;
+}
+
+.auth-benefits {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.auth-benefit {
+    padding: 1rem;
+    border-radius: 22px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--bg-canvas-strong) 94%, transparent), color-mix(in srgb, var(--bg-soft) 92%, transparent));
+    border: 1px solid var(--border-color);
+}
+
+.auth-benefit strong {
+    display: block;
+    margin-bottom: 0.35rem;
+}
+
+.auth-benefit span {
+    color: var(--text-light);
+    font-size: 0.95rem;
+}
+
 .auth-card {
     width: min(100%, 460px);
     padding: 2rem;
+}
+
+.auth-shell-split .auth-card {
+    width: 100%;
+    justify-self: end;
 }
 
 .auth-title {
@@ -1102,6 +1160,7 @@ th {
     .sample-card,
     .step-card,
     .auth-card,
+    .auth-story,
     .card,
     .sample-dataset-card,
     .recent-datasets-banner,
@@ -1117,6 +1176,18 @@ th {
     .hero-buttons,
     .header-buttons {
         flex-wrap: wrap;
+    }
+
+    .auth-shell-split {
+        grid-template-columns: 1fr;
+    }
+
+    .auth-shell-split .auth-card {
+        justify-self: stretch;
+    }
+
+    .auth-benefits {
+        grid-template-columns: 1fr;
     }
 
     .samples-grid {

@@ -164,6 +164,60 @@
             <div class="panel">
                 <div class="panel-header">
                     <div>
+                        <p class="eyebrow">Access Control</p>
+                        <h2>Sharing and row security</h2>
+                    </div>
+                </div>
+                <div class="profile-card">
+                    <div class="card-title">Current access</div>
+                    <div class="semantic-pill">{{ dataset_access_role or 'owner' }}</div>
+                    <div class="card-detail" style="margin-top:10px;">Share this dataset with teammates and optionally restrict them to specific row segments.</div>
+                </div>
+                <div class="transform-form">
+                    <label for="shareTargetUser">Share dataset with</label>
+                    <div class="calc-grid">
+                        <select id="shareTargetUser">
+                            <option value="">Choose a teammate</option>
+                            {% for username in available_users %}
+                            {% if username != session.get('user') %}
+                            <option value="{{ username }}">{{ username }}</option>
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                        <select id="shareAccessRole">
+                            <option value="viewer">Viewer</option>
+                            <option value="editor">Editor</option>
+                        </select>
+                        <button id="shareDatasetBtn" class="btn btn-primary" {% if dataset_access_role == 'viewer' %}disabled{% endif %}>Share</button>
+                    </div>
+                </div>
+                <div class="transform-form">
+                    <label for="rowPolicyUser">Row-level policy</label>
+                    <div class="calc-grid">
+                        <select id="rowPolicyUser">
+                            <option value="">Choose a teammate</option>
+                            {% for username in available_users %}
+                            {% if username != session.get('user') %}
+                            <option value="{{ username }}">{{ username }}</option>
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                        <select id="rowPolicyColumn">
+                            <option value="">Column</option>
+                            {% for column in columns %}
+                            <option value="{{ column }}">{{ column }}</option>
+                            {% endfor %}
+                        </select>
+                        <button id="saveRowPolicyBtn" class="btn btn-outline" {% if dataset_access_role == 'viewer' %}disabled{% endif %}>Save Policy</button>
+                    </div>
+                    <input id="rowPolicyValues" type="text" placeholder="Allowed values, comma separated">
+                </div>
+                <div id="accessSummary" class="stack-list loading-text">Loading collaborators and row-level policies...</div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
                         <p class="eyebrow">Semantic Layer</p>
                         <h2>What each field means</h2>
                     </div>
@@ -1063,6 +1117,47 @@ function renderExecutiveTakeaways(items) {
     `).join('');
 }
 
+function renderAccessSummary(datasetRecord, accessRoleValue) {
+    const container = document.getElementById('accessSummary');
+    const metadata = datasetRecord?.metadata || {};
+    const sharedWith = metadata.shared_with || [];
+    const policies = metadata.row_policies || [];
+    const blocks = [];
+
+    blocks.push(`
+        <div class="profile-card">
+            <div class="card-title">Access role</div>
+            <div class="semantic-pill">${escapeHtml(accessRoleValue || 'owner')}</div>
+            <div class="card-detail" style="margin-top:10px;">Owner: ${escapeHtml(datasetRecord?.owner || 'workspace')}</div>
+        </div>
+    `);
+
+    if (sharedWith.length) {
+        blocks.push(sharedWith.map((entry) => `
+            <div class="profile-card">
+                <div class="card-title">${escapeHtml(entry.user)}</div>
+                <div class="semantic-pill">${escapeHtml(entry.role)}</div>
+                <div class="card-detail" style="margin-top:10px;">Shared dataset access</div>
+            </div>
+        `).join(''));
+    } else {
+        blocks.push('<div class="profile-card"><div class="card-detail">This dataset is not shared with any teammates yet.</div></div>');
+    }
+
+    if (policies.length) {
+        blocks.push(policies.map((policy) => `
+            <div class="profile-card">
+                <div class="card-title">${escapeHtml(policy.user)} / ${escapeHtml(policy.column)}</div>
+                <div class="card-detail">${escapeHtml((policy.allowed_values || []).join(', '))}</div>
+            </div>
+        `).join(''));
+    } else {
+        blocks.push('<div class="profile-card"><div class="card-detail">No row-level restrictions are configured yet.</div></div>');
+    }
+
+    container.innerHTML = blocks.join('');
+}
+
 function prettyActionName(action) {
     return (action || 'activity')
         .replace(/_/g, ' ')
@@ -1348,12 +1443,58 @@ async function loadAnalysisSummary() {
     renderSemanticProfiles(data.summary.semantic_profiles || []);
     renderExecutiveTakeaways(data.summary.executive_takeaways || []);
     currentDatasetId = data.dataset?.id || currentDatasetId;
+    renderAccessSummary(data.dataset || {}, data.access_role || '{{ dataset_access_role or "owner" }}');
     try {
         await loadPipelineState(currentDatasetId, data.dataset || {});
     } catch (error) {
         document.getElementById('pipelineStatus').textContent = error.message;
     }
     renderLineage(data.dataset);
+}
+
+async function shareCurrentDataset() {
+    if (!currentDatasetId) {
+        throw new Error('No active dataset available to share.');
+    }
+    const response = await fetch(`/datasets/${encodeURIComponent(currentDatasetId)}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
+            user: document.getElementById('shareTargetUser').value,
+            role: document.getElementById('shareAccessRole').value,
+        })
+    });
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to save sharing settings');
+    }
+    renderAccessSummary(data.dataset, '{{ dataset_access_role or "owner" }}');
+}
+
+async function saveCurrentRowPolicy() {
+    if (!currentDatasetId) {
+        throw new Error('No active dataset available for row-level security.');
+    }
+    const allowedValues = document.getElementById('rowPolicyValues').value
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+    const response = await fetch(`/datasets/${encodeURIComponent(currentDatasetId)}/row_policy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
+            user: document.getElementById('rowPolicyUser').value,
+            column: document.getElementById('rowPolicyColumn').value,
+            allowed_values: allowedValues,
+        })
+    });
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to save row-level policy');
+    }
+    renderAccessSummary(data.dataset, '{{ dataset_access_role or "owner" }}');
 }
 
 function relationshipPayloadFromButton(button) {
@@ -1872,6 +2013,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             showError(error.message);
         }
     });
+    document.getElementById('shareDatasetBtn')?.addEventListener('click', async () => {
+        try {
+            await shareCurrentDataset();
+            showSuccess('Dataset sharing updated.');
+        } catch (error) {
+            showError(error.message);
+        }
+    });
+    document.getElementById('saveRowPolicyBtn')?.addEventListener('click', async () => {
+        try {
+            await saveCurrentRowPolicy();
+            showSuccess('Row-level policy saved.');
+        } catch (error) {
+            showError(error.message);
+        }
+    });
     document.getElementById('refreshMeasures').addEventListener('click', async () => {
         try {
             await loadMeasures();
@@ -1914,6 +2071,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('lineageSteps').textContent = 'Lineage history could not be loaded.';
         document.getElementById('governanceSummary').textContent = 'Governance summary could not be loaded.';
         document.getElementById('activityLog').textContent = 'Recent dataset activity could not be loaded.';
+        document.getElementById('accessSummary').textContent = 'Dataset access settings could not be loaded.';
         document.getElementById('measureResults').textContent = 'Saved measures could not be loaded.';
     }
 });

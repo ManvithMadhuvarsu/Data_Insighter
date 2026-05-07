@@ -6,7 +6,17 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import pandas as pd
 import json
 from functools import wraps
+from access_control_service import (
+    access_role,
+    can_edit_record,
+    can_view_record,
+    row_policies,
+    shared_entries,
+    with_row_policy,
+    with_shared_user,
+)
 from data_processor import DataProcessor
+from dataset_runtime import load_accessible_dataframe
 from visualization_generator import VisualizationGenerator
 import numpy as np
 from datetime import datetime
@@ -253,6 +263,8 @@ def dataset_metadata(display_name, columns, extra=None):
         'columns': columns,
         'lineage_steps': [],
         'pipeline_steps': [],
+        'shared_with': [],
+        'row_policies': [],
     }
     if extra:
         metadata.update(extra)
@@ -271,6 +283,70 @@ def record_audit_event(action, artifact_type='dataset', dataset_id=None, artifac
         artifact_id=artifact_id,
         details=details or {},
     )
+
+
+def list_accessible_dataset_records(username):
+    owned = list_dataset_records(username)
+    accessible = {record['id']: record for record in owned}
+
+    for record in list_all_dataset_records():
+        if record.get('id') in accessible:
+            continue
+        if can_view_record(record, username):
+            accessible[record['id']] = record
+
+    return sorted(accessible.values(), key=lambda item: item.get('updated_at', ''), reverse=True)
+
+
+def get_accessible_dataset_record(username, dataset_id):
+    if not dataset_id:
+        return None
+
+    owned = get_dataset_record(username, dataset_id)
+    if owned:
+        return owned
+
+    for record in list_all_dataset_records():
+        if record.get('id') != dataset_id:
+            continue
+        if can_view_record(record, username):
+            return record
+    return None
+
+
+def current_dataset_record():
+    if not session.get('user') or not session.get('current_dataset_id'):
+        return None
+    return get_accessible_dataset_record(session['user'], session['current_dataset_id'])
+
+
+def current_dataset_access_role():
+    record = current_dataset_record()
+    if not record:
+        return None
+    return access_role(record, session.get('user'))
+
+
+def require_dataset_edit_access(record):
+    if not record:
+        return error_response('No active dataset found. Load a dataset first.', 400)
+    if not can_edit_record(record, session.get('user')):
+        return error_response('You only have viewer access to this dataset.', 403)
+    return None
+
+
+def load_active_dataset_frame():
+    record = current_dataset_record()
+    if not record:
+        raise ValueError('No active dataset found. Load a dataset first.')
+
+    filepath = session.get('current_filepath') or record.get('stored_path')
+    if not filepath or not os.path.exists(filepath):
+        raise ValueError('The underlying dataset file is no longer available.')
+
+    frame = load_accessible_dataframe(filepath, record, session.get('user'))
+    return frame, record, filepath
+
 
 def login_required(view):
     """Require an authenticated session for app pages and APIs."""
@@ -337,10 +413,8 @@ class NumpyEncoder(json.JSONEncoder):
 def index():
     sample_datasets = [f for f in os.listdir(app.config['SAMPLE_DATASETS']) 
                       if allowed_file(f)]
-    recent_datasets = list_dataset_records(session['user'])[:6]
-    current_dataset = None
-    if session.get('current_dataset_id'):
-        current_dataset = get_dataset_record(session['user'], session['current_dataset_id'])
+    recent_datasets = list_accessible_dataset_records(session['user'])[:6]
+    current_dataset = current_dataset_record()
     return render_template(
         'index.html',
         sample_datasets=sample_datasets,
@@ -464,7 +538,7 @@ def upload():
     # Get list of sample datasets for the template
     sample_datasets = [f for f in os.listdir(app.config['SAMPLE_DATASETS']) 
                       if allowed_file(f)]
-    recent_datasets = list_dataset_records(session['user'])[:6]
+    recent_datasets = list_accessible_dataset_records(session['user'])[:6]
     return render_template('upload.html', sample_datasets=sample_datasets, recent_datasets=recent_datasets)
 
 @app.route('/sample/<filename>')
@@ -525,18 +599,16 @@ def use_sample(filename):
 @app.route('/analysis')
 @login_required
 def analysis():
-    # FIX #5: Never read filepath from query params — use session only
-    filepath = session.get('current_filepath')
-    if not filepath or not os.path.exists(filepath):
-        flash('Please upload a file or select a sample dataset first', 'error')
-        return redirect(url_for('index'))
     try:
-        df = read_data_file(filepath)
+        df, dataset_record, _ = load_active_dataset_frame()
         columns = df.columns.tolist()
-        dataset_record = None
-        if session.get('current_dataset_id'):
-            dataset_record = get_dataset_record(session['user'], session['current_dataset_id'])
-        return render_template('analysis.html', columns=columns, dataset_record=dataset_record)
+        return render_template(
+            'analysis.html',
+            columns=columns,
+            dataset_record=dataset_record,
+            dataset_access_role=access_role(dataset_record, session['user']),
+            available_users=sorted(_load_users().keys()),
+        )
     except Exception as e:
         flash(f'Error loading data file: {str(e)}', 'error')
         return redirect(url_for('index'))
@@ -544,19 +616,14 @@ def analysis():
 @app.route('/analysis_summary')
 @login_required
 def analysis_summary():
-    filepath = session.get('current_filepath')
-    if not filepath or not os.path.exists(filepath):
-        return error_response('No data file loaded. Please upload a file first.', 400)
-
     try:
-        processor = DataProcessor(filepath)
-        dataset_record = None
-        if session.get('current_dataset_id'):
-            dataset_record = get_dataset_record(session['user'], session['current_dataset_id'])
+        frame, dataset_record, _ = load_active_dataset_frame()
+        processor = DataProcessor(dataframe=frame)
         return jsonify({
             'success': True,
             'summary': processor.get_analysis_summary(),
             'dataset': dataset_record,
+            'access_role': access_role(dataset_record, session['user']),
         })
     except Exception as e:
         return error_response(str(e), 400)
@@ -564,15 +631,9 @@ def analysis_summary():
 @app.route('/executive_report')
 @login_required
 def executive_report():
-    filepath = session.get('current_filepath')
-    if not filepath or not os.path.exists(filepath):
-        return error_response('No data file loaded. Please upload a file first.', 400)
-
     try:
-        processor = DataProcessor(filepath)
-        dataset_record = None
-        if session.get('current_dataset_id'):
-            dataset_record = get_dataset_record(session['user'], session['current_dataset_id'])
+        frame, dataset_record, _ = load_active_dataset_frame()
+        processor = DataProcessor(dataframe=frame)
         report = build_report_payload(processor.get_analysis_summary(), dataset_record)
         return jsonify({'success': True, 'report': report})
     except Exception as e:
@@ -616,19 +677,11 @@ def save_report_snapshot():
     if not validate_csrf_token():
         return error_response('Invalid request token', 400)
 
-    filepath = session.get('current_filepath')
-    dataset_id = session.get('current_dataset_id')
-    if not filepath or not os.path.exists(filepath) or not dataset_id:
-        return error_response('No active dataset found. Load a dataset first.', 400)
-
-    dataset_record = get_dataset_record(session['user'], dataset_id)
-    if not dataset_record:
-        return error_response('Active dataset metadata could not be found.', 404)
-
     payload = request.get_json(silent=True) or {}
 
     try:
-        processor = DataProcessor(filepath)
+        frame, dataset_record, _ = load_active_dataset_frame()
+        processor = DataProcessor(dataframe=frame)
         report = build_report_payload(processor.get_analysis_summary(), dataset_record)
         default_name = f"{report['dataset_name']} executive summary"
         name = (payload.get('name') or default_name).strip() or default_name
@@ -636,13 +689,13 @@ def save_report_snapshot():
         record = create_report_record(
             session['user'],
             name=name,
-            dataset_id=dataset_id,
+            dataset_id=dataset_record['id'],
             report_payload=report,
         )
         record_audit_event(
             'report_saved',
             artifact_type='report',
-            dataset_id=dataset_id,
+            dataset_id=dataset_record['id'],
             artifact_id=record['id'],
             details={'name': name, 'section_count': len(report.get('sections', []))},
         )
@@ -654,18 +707,11 @@ def save_report_snapshot():
 @app.route('/governance_summary')
 @login_required
 def governance_summary():
-    filepath = session.get('current_filepath')
-    dataset_id = session.get('current_dataset_id')
-    if not filepath or not os.path.exists(filepath) or not dataset_id:
-        return error_response('No active dataset found. Load a dataset first.', 400)
-
-    dataset_record = get_dataset_record(session['user'], dataset_id)
-    if not dataset_record:
-        return error_response('Active dataset metadata could not be found.', 404)
-
     try:
-        processor = DataProcessor(filepath)
+        frame, dataset_record, _ = load_active_dataset_frame()
+        processor = DataProcessor(dataframe=frame)
         summary = processor.get_analysis_summary()
+        dataset_id = dataset_record['id']
         dashboards = list_dashboard_records(session['user'], dataset_id=dataset_id)
         measures = list_measure_records(session['user'], dataset_id=dataset_id)
         reports = list_report_records(session['user'], dataset_id=dataset_id)
@@ -684,18 +730,12 @@ def export_report():
     if not validate_csrf_token():
         return error_response('Invalid request token', 400)
 
-    filepath = session.get('current_filepath')
-    if not filepath or not os.path.exists(filepath):
-        return error_response('No data file loaded. Please upload a file first.', 400)
-
     payload = request.get_json(silent=True) or {}
     export_type = payload.get('type', 'html')
 
     try:
-        processor = DataProcessor(filepath)
-        dataset_record = None
-        if session.get('current_dataset_id'):
-            dataset_record = get_dataset_record(session['user'], session['current_dataset_id'])
+        frame, dataset_record, _ = load_active_dataset_frame()
+        processor = DataProcessor(dataframe=frame)
         report = build_report_payload(processor.get_analysis_summary(), dataset_record)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -726,10 +766,6 @@ def apply_dataset_transform():
     if not validate_csrf_token():
         return error_response('Invalid request token', 400)
 
-    filepath = session.get('current_filepath')
-    if not filepath or not os.path.exists(filepath):
-        return error_response('No active dataset found. Load a dataset first.', 400)
-
     payload = request.get_json(silent=True) or {}
     operation = payload.get('operation')
     options = payload.get('options') or {}
@@ -738,14 +774,16 @@ def apply_dataset_transform():
         return error_response('No transform operation was provided.', 400)
 
     try:
+        current_record = current_dataset_record()
+        access_error = require_dataset_edit_access(current_record)
+        if access_error:
+            return access_error
+
+        _, _, filepath = load_active_dataset_frame()
         df = read_data_file(filepath)
         transformed_df, description = apply_transform(df, operation, options)
         if transformed_df.empty:
             return error_response('This transform produced an empty dataset, so it was not applied.', 400)
-
-        current_record = None
-        if session.get('current_dataset_id'):
-            current_record = get_dataset_record(session['user'], session['current_dataset_id'])
 
         source_name = current_record['source_name'] if current_record else os.path.basename(filepath)
         current_metadata = current_record.get('metadata', {}) if current_record else {}
@@ -804,13 +842,13 @@ def apply_dataset_transform():
 @app.route('/datasets/<dataset_id>/pipeline')
 @login_required
 def dataset_pipeline(dataset_id):
-    record = get_dataset_record(session['user'], dataset_id)
+    record = get_accessible_dataset_record(session['user'], dataset_id)
     if not record:
         return error_response('Dataset not found in your workspace.', 404)
 
     parent_record = None
     if record.get('parent_dataset_id'):
-        parent_record = get_dataset_record(session['user'], record['parent_dataset_id'])
+        parent_record = get_accessible_dataset_record(session['user'], record['parent_dataset_id'])
 
     return jsonify({
         'success': True,
@@ -834,14 +872,17 @@ def undo_dataset_version(dataset_id):
     if not validate_csrf_token():
         return error_response('Invalid request token', 400)
 
-    record = get_dataset_record(session['user'], dataset_id)
+    record = get_accessible_dataset_record(session['user'], dataset_id)
     if not record:
         return error_response('Dataset not found in your workspace.', 404)
+    access_error = require_dataset_edit_access(record)
+    if access_error:
+        return access_error
     parent_id = record.get('parent_dataset_id')
     if not parent_id:
         return error_response('This dataset has no parent version to restore.', 400)
 
-    parent_record = get_dataset_record(session['user'], parent_id)
+    parent_record = get_accessible_dataset_record(session['user'], parent_id)
     if not parent_record:
         return error_response('The parent dataset version is no longer available.', 404)
     if not os.path.exists(parent_record['stored_path']):
@@ -862,9 +903,12 @@ def rebuild_dataset(dataset_id):
     if not validate_csrf_token():
         return error_response('Invalid request token', 400)
 
-    record = get_dataset_record(session['user'], dataset_id)
+    record = get_accessible_dataset_record(session['user'], dataset_id)
     if not record:
         return error_response('Dataset not found in your workspace.', 404)
+    access_error = require_dataset_edit_access(record)
+    if access_error:
+        return access_error
     if not supports_pipeline_rebuild(record):
         return error_response('This dataset does not yet have a structured rebuild definition.', 400)
 
@@ -913,7 +957,7 @@ def rebuild_dataset(dataset_id):
         session['current_dataset_id'] = rebuilt_record['id']
         session['current_filepath'] = rebuilt_path
 
-        processor = DataProcessor(rebuilt_path)
+        processor = DataProcessor(dataframe=load_accessible_dataframe(rebuilt_path, rebuilt_record, session['user']))
         return jsonify({
             'success': True,
             'message': 'Pipeline rebuilt into a new dataset version.',
@@ -930,9 +974,12 @@ def refresh_dataset(dataset_id):
     if not validate_csrf_token():
         return error_response('Invalid request token', 400)
 
-    record = get_dataset_record(session['user'], dataset_id)
+    record = get_accessible_dataset_record(session['user'], dataset_id)
     if not record:
         return error_response('Dataset not found in your workspace.', 404)
+    access_error = require_dataset_edit_access(record)
+    if access_error:
+        return access_error
 
     try:
         refreshed_df = refresh_dataset_frame(session['user'], record)
@@ -1004,7 +1051,7 @@ def refresh_dataset(dataset_id):
             },
         )
 
-        processor = DataProcessor(updated_record['stored_path'])
+        processor = DataProcessor(dataframe=load_accessible_dataframe(updated_record['stored_path'], updated_record, session['user']))
         return jsonify({
             'success': True,
             'message': 'Dataset refreshed from its latest source definition.',
@@ -1024,7 +1071,7 @@ def refresh_dataset(dataset_id):
 @login_required
 def workspace_catalog():
     datasets = []
-    for record in list_dataset_records(session['user']):
+    for record in list_accessible_dataset_records(session['user']):
         freshness = dataset_freshness(session['user'], record)
         datasets.append({
             'id': record['id'],
@@ -1037,15 +1084,108 @@ def workspace_catalog():
             'pipeline_step_count': len(record.get('metadata', {}).get('pipeline_steps', [])),
             'freshness': freshness,
             'source_available': bool(record.get('stored_path') and os.path.exists(record['stored_path'])),
+            'owner': record.get('owner'),
+            'access_role': access_role(record, session['user']),
+            'shared_count': len(shared_entries(record)),
+            'row_policy_count': len(row_policies(record)),
         })
     return jsonify({'success': True, 'datasets': datasets})
+
+
+@app.route('/datasets/<dataset_id>/share', methods=['POST'])
+@login_required
+def share_dataset(dataset_id):
+    if not validate_csrf_token():
+        return error_response('Invalid request token', 400)
+
+    record = get_accessible_dataset_record(session['user'], dataset_id)
+    if not record:
+        return error_response('Dataset not found in your accessible workspace.', 404)
+    access_error = require_dataset_edit_access(record)
+    if access_error:
+        return access_error
+
+    payload = request.get_json(silent=True) or {}
+    target_user = (payload.get('user') or '').strip()
+    role = (payload.get('role') or 'viewer').strip().lower()
+    users = _load_users()
+
+    if not target_user:
+        return error_response('Choose a teammate username to share this dataset with.', 400)
+    if target_user == session['user']:
+        return error_response('This dataset already belongs to your workspace.', 400)
+    if target_user not in users:
+        return error_response('That username does not exist yet.', 404)
+
+    updated_metadata = with_shared_user(record, target_user, role)
+    updated_record = update_dataset_record(
+        record.get('owner') or session['user'],
+        dataset_id,
+        {'metadata': updated_metadata},
+    )
+    if not updated_record:
+        return error_response('Could not save dataset sharing settings.', 500)
+
+    record_audit_event(
+        'dataset_shared',
+        dataset_id=dataset_id,
+        artifact_id=dataset_id,
+        details={'shared_with': target_user, 'role': role},
+    )
+    return jsonify({'success': True, 'dataset': updated_record})
+
+
+@app.route('/datasets/<dataset_id>/row_policy', methods=['POST'])
+@login_required
+def save_dataset_row_policy(dataset_id):
+    if not validate_csrf_token():
+        return error_response('Invalid request token', 400)
+
+    record = get_accessible_dataset_record(session['user'], dataset_id)
+    if not record:
+        return error_response('Dataset not found in your accessible workspace.', 404)
+    access_error = require_dataset_edit_access(record)
+    if access_error:
+        return access_error
+
+    payload = request.get_json(silent=True) or {}
+    target_user = (payload.get('user') or '').strip()
+    column = (payload.get('column') or '').strip()
+    allowed_values = payload.get('allowed_values') or []
+    users = _load_users()
+
+    if not target_user or target_user not in users:
+        return error_response('Choose an existing teammate username before saving a row policy.', 400)
+    if not column:
+        return error_response('Choose a column for the row-level policy.', 400)
+    if column not in (record.get('metadata', {}).get('columns') or []):
+        return error_response('That column does not exist on the current dataset.', 400)
+    if not allowed_values:
+        return error_response('Provide at least one allowed value for the row-level policy.', 400)
+
+    updated_metadata = with_row_policy(record, target_user, column, [str(value).strip() for value in allowed_values])
+    updated_record = update_dataset_record(
+        record.get('owner') or session['user'],
+        dataset_id,
+        {'metadata': updated_metadata},
+    )
+    if not updated_record:
+        return error_response('Could not save row-level security settings.', 500)
+
+    record_audit_event(
+        'row_policy_saved',
+        dataset_id=dataset_id,
+        artifact_id=dataset_id,
+        details={'user': target_user, 'column': column, 'allowed_values': allowed_values},
+    )
+    return jsonify({'success': True, 'dataset': updated_record})
 
 @app.route('/data_model')
 @login_required
 def data_model():
     datasets = [
         record
-        for record in list_dataset_records(session['user'])
+        for record in list_accessible_dataset_records(session['user'])
         if os.path.exists(record.get('stored_path', ''))
     ]
     model = suggest_relationships(datasets)
@@ -1067,10 +1207,12 @@ def save_relationship():
     if any(not payload.get(field) for field in required):
         return error_response('Choose both datasets and key columns before saving a relationship.', 400)
 
-    left_record = get_dataset_record(session['user'], payload['left_dataset_id'])
-    right_record = get_dataset_record(session['user'], payload['right_dataset_id'])
+    left_record = get_accessible_dataset_record(session['user'], payload['left_dataset_id'])
+    right_record = get_accessible_dataset_record(session['user'], payload['right_dataset_id'])
     if not left_record or not right_record:
         return error_response('One of the selected datasets was not found.', 404)
+    if not can_edit_record(left_record, session['user']) or not can_edit_record(right_record, session['user']):
+        return error_response('You need editor access on both datasets to save this relationship.', 403)
 
     record = create_relationship_record(
         session['user'],
@@ -1102,10 +1244,12 @@ def create_joined_dataset():
         return error_response('Invalid request token', 400)
 
     payload = request.get_json(silent=True) or {}
-    left_record = get_dataset_record(session['user'], payload.get('left_dataset_id', ''))
-    right_record = get_dataset_record(session['user'], payload.get('right_dataset_id', ''))
+    left_record = get_accessible_dataset_record(session['user'], payload.get('left_dataset_id', ''))
+    right_record = get_accessible_dataset_record(session['user'], payload.get('right_dataset_id', ''))
     if not left_record or not right_record:
         return error_response('Choose two valid datasets to join.', 400)
+    if not can_edit_record(left_record, session['user']) or not can_edit_record(right_record, session['user']):
+        return error_response('You need editor access on both datasets to create a joined dataset.', 403)
 
     try:
         joined_df = join_datasets(
@@ -1207,10 +1351,6 @@ def create_measure():
     if not validate_csrf_token():
         return error_response('Invalid request token', 400)
 
-    filepath = session.get('current_filepath')
-    if not filepath or not os.path.exists(filepath):
-        return error_response('No active dataset found. Load a dataset first.', 400)
-
     payload = request.get_json(silent=True) or {}
     name = (payload.get('name') or '').strip()
     definition = payload.get('definition') or {}
@@ -1220,12 +1360,17 @@ def create_measure():
         return error_response('Choose a measure formula type.', 400)
 
     try:
-        df = read_data_file(filepath)
+        current_record = current_dataset_record()
+        access_error = require_dataset_edit_access(current_record)
+        if access_error:
+            return access_error
+
+        df, _, _ = load_active_dataset_frame()
         definition['name'] = name
         result = evaluate_measure(df, definition)
         record = create_measure_record(
             session['user'],
-            dataset_id=session.get('current_dataset_id'),
+            dataset_id=current_record['id'],
             name=name,
             definition=definition,
             latest_result=result,
@@ -1233,7 +1378,7 @@ def create_measure():
         record_audit_event(
             'measure_created',
             artifact_type='measure',
-            dataset_id=session.get('current_dataset_id'),
+            dataset_id=current_record['id'],
             artifact_id=record['id'],
             details={'name': name, 'type': definition.get('type')},
         )
@@ -1244,9 +1389,9 @@ def create_measure():
 @app.route('/datasets/<dataset_id>/activate')
 @login_required
 def activate_dataset(dataset_id):
-    dataset_record = get_dataset_record(session['user'], dataset_id)
+    dataset_record = get_accessible_dataset_record(session['user'], dataset_id)
     if not dataset_record:
-        flash('Dataset not found in your workspace.', 'error')
+        flash('Dataset not found in your accessible workspace.', 'error')
         return redirect(url_for('index'))
 
     if not os.path.exists(dataset_record['stored_path']):
@@ -1267,14 +1412,12 @@ def activate_dataset(dataset_id):
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    filepath = session.get('current_filepath')
-    if not filepath or not os.path.exists(filepath):
+    try:
+        _, current_dataset, _ = load_active_dataset_frame()
+        return render_template('dashboard.html', dataset_record=current_dataset)
+    except Exception:
         flash('Please upload a file or select a sample dataset first', 'error')
         return redirect(url_for('index'))
-    current_dataset = None
-    if session.get('current_dataset_id'):
-        current_dataset = get_dataset_record(session['user'], session['current_dataset_id'])
-    return render_template('dashboard.html', dataset_record=current_dataset)
 
 @app.route('/generate_visualization', methods=['POST'])
 @login_required
@@ -1284,26 +1427,19 @@ def generate_visualization():
             return error_response('Invalid request token', 400)
 
         data = request.json
-        # FIX #5: Never accept filepath from client — always use session
-        filepath = session.get('current_filepath')
         columns = data.get('columns')
         viz_type = data.get('type')
         sample_percentage = data.get('sample_percentage', 100)
         filters = data.get('filters')
-        
-        if not filepath:
-            return error_response('No data file loaded. Please upload a file first.', 400)
-            
+
         if not columns:
             return error_response('No columns selected', 400)
-            
+
         if not viz_type:
             return error_response('No visualization type selected', 400)
-        
-        if not os.path.exists(filepath):
-            return error_response('Data file not found. Please upload again.', 400)
-        
-        viz_generator = VisualizationGenerator(filepath)
+
+        frame, _, _ = load_active_dataset_frame()
+        viz_generator = VisualizationGenerator(dataframe=frame)
         visualization = viz_generator.generate_visualization(
             columns, 
             viz_type, 
@@ -1501,45 +1637,42 @@ def starter_dashboard():
     if not validate_csrf_token():
         return error_response('Invalid request token', 400)
 
-    filepath = session.get('current_filepath')
-    if not filepath or not os.path.exists(filepath):
-        return error_response('No active dataset found. Load a dataset first.', 400)
+    try:
+        frame, _, _ = load_active_dataset_frame()
+        processor = DataProcessor(dataframe=frame)
+        summary = processor.get_analysis_summary()
+        recommendations = summary.get('recommended_visualizations', [])[:4]
+        if not recommendations:
+            return error_response('No starter dashboard recommendations are available for this dataset yet.', 400)
 
-    processor = DataProcessor(filepath)
-    summary = processor.get_analysis_summary()
-    recommendations = summary.get('recommended_visualizations', [])[:4]
-    if not recommendations:
-        return error_response('No starter dashboard recommendations are available for this dataset yet.', 400)
+        starter_cards = []
+        positions = [
+            {'x': 0, 'y': 0},
+            {'x': 430, 'y': 0},
+            {'x': 0, 'y': 340},
+            {'x': 430, 'y': 340},
+        ]
+        for idx, chart in enumerate(recommendations):
+            starter_cards.append({
+                'id': int(time.time()) + idx,
+                'title': chart['title'],
+                'type': chart['type'],
+                'columns': chart['columns'],
+                'samplePercentage': chart.get('sample_percentage', 100),
+                'position': positions[idx] if idx < len(positions) else {'x': 0, 'y': idx * 320},
+                'size': {'width': 400, 'height': 300},
+            })
 
-    starter_cards = []
-    positions = [
-        {'x': 0, 'y': 0},
-        {'x': 430, 'y': 0},
-        {'x': 0, 'y': 340},
-        {'x': 430, 'y': 340},
-    ]
-    for idx, chart in enumerate(recommendations):
-        starter_cards.append({
-            'id': int(time.time()) + idx,
-            'title': chart['title'],
-            'type': chart['type'],
-            'columns': chart['columns'],
-            'samplePercentage': chart.get('sample_percentage', 100),
-            'position': positions[idx] if idx < len(positions) else {'x': 0, 'y': idx * 320},
-            'size': {'width': 400, 'height': 300},
-        })
-
-    return jsonify({'success': True, 'dashboard_viz': starter_cards})
+        return jsonify({'success': True, 'dashboard_viz': starter_cards})
+    except Exception as e:
+        return error_response(str(e), 400)
 
 @app.route('/dashboard_filter_options')
 @login_required
 def dashboard_filter_options():
-    filepath = session.get('current_filepath')
-    if not filepath or not os.path.exists(filepath):
-        return error_response('No active dataset found. Load a dataset first.', 400)
-
     try:
-        processor = DataProcessor(filepath)
+        frame, _, _ = load_active_dataset_frame()
+        processor = DataProcessor(dataframe=frame)
         summary = processor.get_analysis_summary()
         semantic_profiles = summary.get('semantic_profiles', [])
         dimension_columns = [

@@ -1,11 +1,10 @@
 import math
-import warnings
 from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
 
-from file_utils import read_data_file
+from dataset_runtime import load_prepared_dataframe, prepare_dataframe
 from insight_engine import (
     anomaly_insights,
     build_executive_takeaways,
@@ -20,49 +19,21 @@ from semantic_model import infer_dataset_semantics
 
 
 class DataProcessor:
-    def __init__(self, filepath: str):
+    def __init__(self, filepath: str | None = None, dataframe: pd.DataFrame | None = None):
         self.filepath = filepath
-        self.df = self._load_data()
-        self.df = self._prepare_dataframe(self.df)
+        if dataframe is not None:
+            self.df = prepare_dataframe(dataframe)
+        elif filepath:
+            self.df = self._load_data()
+        else:
+            raise ValueError("Provide either a filepath or a dataframe")
 
     def _load_data(self) -> pd.DataFrame:
         """Load data from file with enhanced format support and error handling."""
         try:
-            return read_data_file(self.filepath)
+            return load_prepared_dataframe(self.filepath)
         except Exception as e:
             raise ValueError(f"Error loading data: {str(e)}")
-
-    def _prepare_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Trim names, drop empty rows/cols, and infer basic semantic types."""
-        prepared = df.copy()
-        prepared.columns = [str(column).strip() for column in prepared.columns]
-        prepared = prepared.dropna(axis=1, how='all').dropna(how='all').reset_index(drop=True)
-
-        for column in prepared.columns:
-            series = prepared[column]
-
-            if pd.api.types.is_object_dtype(series) or pd.api.types.is_string_dtype(series):
-                non_null = series.dropna().astype(str).str.strip()
-                if non_null.empty:
-                    continue
-
-                numeric_series = pd.to_numeric(non_null.str.replace(",", "", regex=False), errors='coerce')
-                numeric_ratio = numeric_series.notna().mean()
-                if numeric_ratio >= 0.8:
-                    prepared[column] = pd.to_numeric(
-                        series.astype(str).str.replace(",", "", regex=False),
-                        errors='coerce'
-                    )
-                    continue
-
-                with warnings.catch_warnings():
-                    warnings.simplefilter('ignore', UserWarning)
-                    datetime_series = pd.to_datetime(series, errors='coerce')
-                datetime_ratio = datetime_series.notna().mean()
-                if datetime_ratio >= 0.8:
-                    prepared[column] = datetime_series
-
-        return prepared
 
     def _serialize_value(self, value: Any) -> Any:
         if pd.isna(value):

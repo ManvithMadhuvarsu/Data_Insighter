@@ -30,6 +30,26 @@ def _safe_user_segment(username: str) -> str:
     return normalized or 'default_user'
 
 
+def _owner_from_record_path(base_dir: str, path: str) -> Optional[str]:
+    try:
+        relative = os.path.relpath(path, base_dir)
+        parts = relative.split(os.sep)
+        if len(parts) >= 2:
+            return parts[0]
+    except ValueError:
+        return None
+    return None
+
+
+def _inject_owner(record: Optional[Dict[str, Any]], owner: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not record:
+        return None
+    hydrated = dict(record)
+    if owner and not hydrated.get('owner'):
+        hydrated['owner'] = owner
+    return hydrated
+
+
 def _dataset_path(username: str, dataset_id: str) -> str:
     user_dir = os.path.join(DATASETS_DIR, _safe_user_segment(username))
     os.makedirs(user_dir, exist_ok=True)
@@ -192,6 +212,7 @@ def create_dataset_record(
 
     record = {
         'id': dataset_id,
+        'owner': username,
         'source_name': source_name,
         'stored_path': stored_path,
         'source_type': source_type,
@@ -205,7 +226,7 @@ def create_dataset_record(
 
     _write_json_atomic(_dataset_path(username, dataset_id), record)
 
-    return record
+    return _inject_owner(record, username)
 
 
 def update_dataset_record(username: str, dataset_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -223,14 +244,14 @@ def update_dataset_record(username: str, dataset_id: str, updates: Dict[str, Any
 
 def get_dataset_record(username: str, dataset_id: str) -> Optional[Dict[str, Any]]:
     ensure_workspace_dirs()
-    return _read_json(_dataset_path(username, dataset_id))
+    return _inject_owner(_read_json(_dataset_path(username, dataset_id)), username)
 
 
 def list_dataset_records(username: str) -> List[Dict[str, Any]]:
     ensure_workspace_dirs()
     records = []
     for path in _list_user_dataset_files(username):
-        record = _read_json(path)
+        record = _inject_owner(_read_json(path), username)
         if record:
             records.append(record)
 
@@ -242,7 +263,7 @@ def list_all_dataset_records() -> List[Dict[str, Any]]:
     ensure_workspace_dirs()
     records = []
     for path in _list_all_dataset_files():
-        record = _read_json(path)
+        record = _inject_owner(_read_json(path), _owner_from_record_path(DATASETS_DIR, path))
         if record:
             records.append(record)
 
@@ -262,6 +283,7 @@ def create_dashboard_record(
     now = datetime.utcnow().isoformat() + 'Z'
     record = {
         'id': dashboard_id,
+        'owner': username,
         'name': name,
         'dataset_id': dataset_id,
         'created_at': now,
@@ -270,12 +292,12 @@ def create_dashboard_record(
         'dashboard_state': dashboard_state or {},
     }
     _write_json_atomic(_dashboard_path(username, dashboard_id), record)
-    return record
+    return _inject_owner(record, username)
 
 
 def get_dashboard_record(username: str, dashboard_id: str) -> Optional[Dict[str, Any]]:
     ensure_workspace_dirs()
-    return _read_json(_dashboard_path(username, dashboard_id))
+    return _inject_owner(_read_json(_dashboard_path(username, dashboard_id)), username)
 
 
 def create_report_record(
@@ -289,6 +311,7 @@ def create_report_record(
     now = datetime.utcnow().isoformat() + 'Z'
     record = {
         'id': report_id,
+        'owner': username,
         'name': name,
         'dataset_id': dataset_id,
         'created_at': now,
@@ -296,19 +319,19 @@ def create_report_record(
         'report': report_payload,
     }
     _write_json_atomic(_report_path(username, report_id), record)
-    return record
+    return _inject_owner(record, username)
 
 
 def get_report_record(username: str, report_id: str) -> Optional[Dict[str, Any]]:
     ensure_workspace_dirs()
-    return _read_json(_report_path(username, report_id))
+    return _inject_owner(_read_json(_report_path(username, report_id)), username)
 
 
 def list_report_records(username: str, dataset_id: Optional[str] = None) -> List[Dict[str, Any]]:
     ensure_workspace_dirs()
     records = []
     for path in _list_user_report_files(username):
-        record = _read_json(path)
+        record = _inject_owner(_read_json(path), username)
         if not record:
             continue
         if dataset_id and record.get('dataset_id') != dataset_id:
@@ -323,7 +346,7 @@ def list_dashboard_records(username: str, dataset_id: Optional[str] = None) -> L
     ensure_workspace_dirs()
     records = []
     for path in _list_user_dashboard_files(username):
-        record = _read_json(path)
+        record = _inject_owner(_read_json(path), username)
         if not record:
             continue
         if dataset_id and record.get('dataset_id') != dataset_id:
@@ -348,6 +371,7 @@ def create_relationship_record(
     now = datetime.utcnow().isoformat() + 'Z'
     record = {
         'id': relationship_id,
+        'owner': username,
         'left_dataset_id': left_dataset_id,
         'left_column': left_column,
         'right_dataset_id': right_dataset_id,
@@ -358,14 +382,14 @@ def create_relationship_record(
         'updated_at': now,
     }
     _write_json_atomic(_relationship_path(username, relationship_id), record)
-    return record
+    return _inject_owner(record, username)
 
 
 def list_relationship_records(username: str) -> List[Dict[str, Any]]:
     ensure_workspace_dirs()
     records = []
     for path in _list_user_relationship_files(username):
-        record = _read_json(path)
+        record = _inject_owner(_read_json(path), username)
         if record:
             records.append(record)
 
@@ -385,6 +409,7 @@ def create_measure_record(
     now = datetime.utcnow().isoformat() + 'Z'
     record = {
         'id': measure_id,
+        'owner': username,
         'dataset_id': dataset_id,
         'name': name,
         'definition': definition,
@@ -393,14 +418,14 @@ def create_measure_record(
         'updated_at': now,
     }
     _write_json_atomic(_measure_path(username, measure_id), record)
-    return record
+    return _inject_owner(record, username)
 
 
 def list_measure_records(username: str, dataset_id: Optional[str] = None) -> List[Dict[str, Any]]:
     ensure_workspace_dirs()
     records = []
     for path in _list_user_measure_files(username):
-        record = _read_json(path)
+        record = _inject_owner(_read_json(path), username)
         if not record:
             continue
         if dataset_id and record.get('dataset_id') != dataset_id:

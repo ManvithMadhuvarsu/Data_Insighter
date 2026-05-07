@@ -9,7 +9,7 @@ import numpy as np
 from scipy import stats
 import warnings
 from sklearn.linear_model import LinearRegression
-from file_utils import read_data_file
+from dataset_runtime import load_prepared_dataframe, prepare_dataframe
 
 # Custom JSON encoder to handle NumPy types
 class NumpyEncoder(json.JSONEncoder):
@@ -37,53 +37,18 @@ class NumpyEncoder(json.JSONEncoder):
         return super().default(obj)
 
 class VisualizationGenerator:
-    def __init__(self, filepath: str = None):
+    def __init__(self, filepath: str = None, dataframe: pd.DataFrame | None = None):
         self.filepath = filepath
         self.df = None  # Initialize df to None first
-        
-        if filepath:
+
+        if dataframe is not None:
+            self.df = prepare_dataframe(dataframe)
+        elif filepath:
             try:
-                # Use the improved read_data_file function from app.py
-                self.df = read_data_file(filepath)
-                
+                self.df = load_prepared_dataframe(filepath)
+
                 if self.df is None or self.df.empty:
                     raise ValueError("Could not read the file or file is empty")
-                
-                # Convert data types appropriately
-                for column in self.df.columns:
-                    try:
-                        # Try to convert string numbers to numeric
-                        if self.df[column].dtype == 'object':
-                            try:
-                                # First try converting to numeric
-                                numeric_series = pd.to_numeric(self.df[column], errors='coerce')
-                                if not numeric_series.isna().all():  # Only convert if there are valid numbers
-                                    self.df[column] = numeric_series
-                            except (ValueError, TypeError):
-                                # If that fails, try converting to datetime
-                                try:
-                                    datetime_series = pd.to_datetime(self.df[column], errors='coerce')
-                                    if not datetime_series.isna().all():  # Only convert if there are valid dates
-                                        self.df[column] = datetime_series
-                                except:
-                                    # If both fail, keep as string
-                                    pass
-                    except Exception as e:
-                        print(f"Warning: Could not convert column {column}: {str(e)}")
-                        continue
-                
-                # Clean column names
-                self.df.columns = self.df.columns.str.strip()
-                
-                # Remove any completely empty columns
-                self.df = self.df.dropna(axis=1, how='all')
-                
-                # Remove any completely empty rows
-                self.df = self.df.dropna(how='all')
-                
-                # Reset index after cleaning
-                self.df = self.df.reset_index(drop=True)
-                
             except Exception as e:
                 self.df = None  # Ensure df is None if there's an error
                 raise ValueError(f"Error loading data: {str(e)}")

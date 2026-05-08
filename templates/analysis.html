@@ -325,6 +325,25 @@
             <div class="panel">
                 <div class="panel-header">
                     <div>
+                        <p class="eyebrow">SQL Workbench</p>
+                        <h2>Warehouse-style query access</h2>
+                    </div>
+                    <div class="recommendation-actions">
+                        <button id="runSqlWorkbench" class="btn btn-primary">Run SQL</button>
+                    </div>
+                </div>
+                <div class="card-detail">Query the active dataset as <code>dataset</code>. Use this for grouped metrics, ranked cuts, and quick validation on larger managed snapshots.</div>
+                <div class="transform-form">
+                    <label for="sqlWorkbench">SQL query</label>
+                    <textarea id="sqlWorkbench" rows="8" style="width:100%; border-radius:18px; padding:14px; border:1px solid var(--border-color); background:var(--bg-soft); color:var(--text-color);">SELECT * FROM dataset LIMIT 20</textarea>
+                </div>
+                <div id="sqlWorkbenchStatus" class="prep-status">Ready to run SQL against the current dataset materialization.</div>
+                <div id="sqlWorkbenchResults" class="report-preview loading-text">Query results will appear here.</div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
                         <p class="eyebrow">Business Metrics</p>
                         <h2>Reusable calculated measures</h2>
                     </div>
@@ -1821,6 +1840,50 @@ async function toggleRefreshJob(jobId, enabled) {
     await loadRefreshJobs();
 }
 
+function renderSqlWorkbenchResult(result) {
+    const status = document.getElementById('sqlWorkbenchStatus');
+    const container = document.getElementById('sqlWorkbenchResults');
+    status.textContent = `Engine: ${result.engine} / Returned ${result.returned_rows} of ${result.row_count} rows`;
+
+    if (!result.rows.length) {
+        container.innerHTML = '<div class="card-detail">The query ran successfully but returned no rows.</div>';
+        return;
+    }
+
+    const header = result.columns.map((column) => `<th>${escapeHtml(column)}</th>`).join('');
+    const rows = result.rows.map((row) => `
+        <tr>${result.columns.map((column) => `<td>${escapeHtml(row[column] ?? '')}</td>`).join('')}</tr>
+    `).join('');
+    container.innerHTML = `
+        <div class="card-detail">Query: <code>${escapeHtml(result.sql)}</code></div>
+        <div style="overflow:auto;">
+            <table class="data-table">
+                <thead><tr>${header}</tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+async function runSqlWorkbench() {
+    const status = document.getElementById('sqlWorkbenchStatus');
+    status.textContent = 'Running query against the managed dataset snapshot...';
+    const response = await fetch('/query_workbench', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
+            sql: document.getElementById('sqlWorkbench').value,
+            limit: 200,
+        })
+    });
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Query execution failed');
+    }
+    renderSqlWorkbenchResult(data.result);
+}
+
 async function exportReport(type) {
     const response = await fetch('/export_report', {
         method: 'POST',
@@ -2186,6 +2249,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             showError(error.message);
         }
     });
+    document.getElementById('runSqlWorkbench').addEventListener('click', async () => {
+        try {
+            await runSqlWorkbench();
+        } catch (error) {
+            document.getElementById('sqlWorkbenchStatus').textContent = error.message;
+            showError(error.message);
+        }
+    });
     document.getElementById('undoLastStep').addEventListener('click', async () => {
         try {
             await undoToParentDataset();
@@ -2209,6 +2280,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await loadDataModel();
         await loadMeasures();
         await loadRefreshJobs();
+        await runSqlWorkbench();
     } catch (error) {
         showError(error.message);
         document.getElementById('qualityAlerts').textContent = 'Unable to inspect the dataset.';
@@ -2225,6 +2297,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('accessSummary').textContent = 'Dataset access settings could not be loaded.';
         document.getElementById('measureResults').textContent = 'Saved measures could not be loaded.';
         document.getElementById('refreshJobsList').textContent = 'Refresh schedules could not be loaded.';
+        document.getElementById('sqlWorkbenchResults').textContent = 'SQL workbench results could not be loaded.';
     }
 });
 </script>

@@ -28,6 +28,7 @@ from dataset_refresh_service import dataset_freshness, refresh_dataset_frame, sc
 from file_utils import SUPPORTED_EXTENSIONS, read_data_file
 from governance_service import build_governance_summary
 from dotenv import load_dotenv
+from query_engine_service import execute_dataset_sql
 from refresh_job_service import (
     create_refresh_schedule,
     list_refresh_schedules,
@@ -932,6 +933,24 @@ def governance_summary():
             'success': True,
             'governance': governance,
         })
+    except Exception as e:
+        return error_response(str(e), 400)
+
+
+@app.route('/query_workbench', methods=['POST'])
+@login_required
+def query_workbench():
+    if not validate_csrf_token():
+        return error_response('Invalid request token', 400)
+
+    payload = request.get_json(silent=True) or {}
+    sql = payload.get('sql', '')
+    limit = payload.get('limit', 200)
+
+    try:
+        _, dataset_record, _ = load_active_dataset_frame()
+        result = execute_dataset_sql(dataset_record, session['user'], sql, limit=limit)
+        return jsonify({'success': True, 'result': result})
     except Exception as e:
         return error_response(str(e), 400)
 

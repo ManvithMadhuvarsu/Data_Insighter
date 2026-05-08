@@ -295,6 +295,12 @@ def dataset_metadata(display_name, columns, extra=None):
         'pipeline_steps': [],
         'shared_with': [],
         'row_policies': [],
+        'lifecycle': {
+            'certification': 'draft',
+            'stage': 'dev',
+            'steward': session.get('user'),
+            'history': [],
+        },
     }
     if extra:
         metadata.update(extra)
@@ -469,6 +475,62 @@ def get_accessible_report_record(username, report_id):
                 }
             return hydrated
     return None
+
+
+def artifact_lifecycle(record):
+    metadata = record.get('metadata') or {}
+    lifecycle = metadata.get('lifecycle') or {}
+    return {
+        'certification': lifecycle.get('certification') or 'draft',
+        'stage': lifecycle.get('stage') or 'dev',
+        'steward': lifecycle.get('steward') or record.get('owner'),
+        'history': lifecycle.get('history') or [],
+    }
+
+
+def update_artifact_lifecycle(record, certification, stage, steward, notes=''):
+    current = artifact_lifecycle(record)
+    history = (current.get('history') or [])[-9:]
+    lifecycle_event = {
+        'certification': certification,
+        'stage': stage,
+        'steward': steward,
+        'notes': notes,
+        'updated_by': session.get('user'),
+        'updated_at': datetime.utcnow().isoformat() + 'Z',
+    }
+    history.append(lifecycle_event)
+    metadata = {
+        **(record.get('metadata') or {}),
+        'lifecycle': {
+            'certification': certification,
+            'stage': stage,
+            'steward': steward,
+            'history': history,
+        },
+    }
+    return metadata
+
+
+def resolve_artifact_record(artifact_type, artifact_id, username):
+    if artifact_type == 'dataset':
+        return get_accessible_dataset_record(username, artifact_id)
+    if artifact_type == 'dashboard':
+        return get_accessible_dashboard_record(username, artifact_id)
+    if artifact_type == 'report':
+        return get_accessible_report_record(username, artifact_id)
+    return None
+
+
+def persist_artifact_update(artifact_type, record, updates):
+    owner = record['owner']
+    if artifact_type == 'dataset':
+        return update_dataset_record(owner, record['id'], updates)
+    if artifact_type == 'dashboard':
+        return update_dashboard_record(owner, record['id'], updates)
+    if artifact_type == 'report':
+        return update_report_record(owner, record['id'], updates)
+    raise ValueError('Unsupported artifact type')
 
 
 def current_dataset_record():
@@ -826,6 +888,7 @@ def report_library():
                 'updated_at': report['updated_at'],
                 'section_count': len(report.get('report', {}).get('sections', [])),
                 'shared_count': len(shared_entries(report)),
+                'lifecycle': artifact_lifecycle(report),
             }
             for report in reports
         ],
@@ -865,6 +928,7 @@ def save_report_snapshot():
                 'shared_with': shared_entries(dataset_record),
                 'source_dataset_id': dataset_record['id'],
                 'source_dataset_owner': dataset_record.get('owner'),
+                'lifecycle': artifact_lifecycle(dataset_record),
             },
         )
         record_audit_event(
@@ -953,6 +1017,47 @@ def query_workbench():
         return jsonify({'success': True, 'result': result})
     except Exception as e:
         return error_response(str(e), 400)
+
+
+@app.route('/artifacts/<artifact_type>/<artifact_id>/lifecycle', methods=['POST'])
+@login_required
+def update_artifact_lifecycle_route(artifact_type, artifact_id):
+    if not validate_csrf_token():
+        return error_response('Invalid request token', 400)
+
+    record = resolve_artifact_record(artifact_type, artifact_id, session['user'])
+    if not record:
+        return error_response('Artifact not found in your workspace.', 404)
+    if not can_edit_record(record, session['user']) and artifact_type != 'dataset':
+        return error_response('You do not have permission to update this artifact lifecycle.', 403)
+    if artifact_type == 'dataset':
+        access_error = require_dataset_edit_access(record)
+        if access_error:
+            return access_error
+
+    payload = request.get_json(silent=True) or {}
+    certification = (payload.get('certification') or 'draft').strip().lower()
+    stage = (payload.get('stage') or 'dev').strip().lower()
+    steward = (payload.get('steward') or record.get('owner') or session.get('user')).strip()
+    notes = (payload.get('notes') or '').strip()
+    if certification not in {'draft', 'review', 'certified'}:
+        return error_response('Certification must be draft, review, or certified.', 400)
+    if stage not in {'dev', 'test', 'prod'}:
+        return error_response('Stage must be dev, test, or prod.', 400)
+
+    updated_record = persist_artifact_update(
+        artifact_type,
+        record,
+        {'metadata': update_artifact_lifecycle(record, certification, stage, steward, notes)},
+    )
+    record_audit_event(
+        'artifact_lifecycle_updated',
+        artifact_type=artifact_type,
+        dataset_id=updated_record.get('dataset_id') or updated_record.get('id'),
+        artifact_id=updated_record['id'],
+        details={'certification': certification, 'stage': stage, 'steward': steward},
+    )
+    return jsonify({'success': True, 'artifact': updated_record})
 
 @app.route('/export_report', methods=['POST'])
 @login_required
@@ -1898,6 +2003,7 @@ def dashboard_library():
                 'updated_at': dashboard['updated_at'],
                 'chart_count': len(dashboard.get('dashboard_viz', [])),
                 'shared_count': len(shared_entries(dashboard)),
+                'lifecycle': artifact_lifecycle(dashboard),
             }
             for dashboard in dashboards
         ]
@@ -1928,6 +2034,12 @@ def save_dashboard_record():
         metadata={
             'shared_with': shared_entries(current_dataset_record()) if current_dataset_record() else [],
             'source_dataset_id': session.get('current_dataset_id'),
+            'lifecycle': artifact_lifecycle(current_dataset_record()) if current_dataset_record() else {
+                'certification': 'draft',
+                'stage': 'dev',
+                'steward': session.get('user'),
+                'history': [],
+            },
         },
     )
     record_audit_event(

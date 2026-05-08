@@ -164,6 +164,45 @@
             <div class="panel">
                 <div class="panel-header">
                     <div>
+                        <p class="eyebrow">Lifecycle</p>
+                        <h2>Certification and promotion</h2>
+                    </div>
+                </div>
+                <div class="builder-grid">
+                    <div class="control-group">
+                        <label for="artifactCertification">Certification</label>
+                        <select id="artifactCertification">
+                            <option value="draft">Draft</option>
+                            <option value="review">Review</option>
+                            <option value="certified">Certified</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="artifactStage">Stage</label>
+                        <select id="artifactStage">
+                            <option value="dev">Dev</option>
+                            <option value="test">Test</option>
+                            <option value="prod">Prod</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="artifactSteward">Steward</label>
+                        <input id="artifactSteward" type="text" value="{{ session.get('user') }}">
+                    </div>
+                </div>
+                <div class="transform-form">
+                    <label for="artifactLifecycleNotes">Change note</label>
+                    <input id="artifactLifecycleNotes" type="text" placeholder="Why this artifact is moving forward">
+                </div>
+                <div class="builder-actions">
+                    <button id="updateDatasetLifecycle" class="btn btn-primary" {% if dataset_access_role == 'viewer' %}disabled{% endif %}>Update Dataset Lifecycle</button>
+                </div>
+                <div id="lifecycleSummary" class="stack-list loading-text">Loading deployment and certification history...</div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
                         <p class="eyebrow">Refresh Automation</p>
                         <h2>Schedules and materialization</h2>
                     </div>
@@ -1222,9 +1261,11 @@ function prettyActionName(action) {
 function renderGovernanceSummary(governance) {
     const summaryContainer = document.getElementById('governanceSummary');
     const activityContainer = document.getElementById('activityLog');
+    const lifecycleContainer = document.getElementById('lifecycleSummary');
     const sensitivity = governance.sensitivity || { label: 'Unknown', reasons: [] };
     const pipeline = governance.pipeline || {};
     const downstream = governance.downstream_assets || {};
+    const lifecycle = governance.lifecycle || { certification: 'draft', stage: 'dev', steward: '', history: [] };
 
     summaryContainer.innerHTML = `
         <div class="profile-card">
@@ -1242,6 +1283,25 @@ function renderGovernanceSummary(governance) {
             <div class="card-detail">${downstream.dashboards || 0} dashboard(s) / ${downstream.measures || 0} reusable measure(s) / ${downstream.reports || 0} saved report(s)</div>
             <div class="card-detail" style="margin-top:8px;">Changes to this dataset may affect those saved artifacts.</div>
         </div>
+    `;
+
+    document.getElementById('artifactCertification').value = lifecycle.certification || 'draft';
+    document.getElementById('artifactStage').value = lifecycle.stage || 'dev';
+    document.getElementById('artifactSteward').value = lifecycle.steward || '{{ session.get("user") }}';
+    lifecycleContainer.innerHTML = `
+        <div class="profile-card">
+            <div class="card-title">Current lifecycle</div>
+            <div class="card-detail">Certification: ${escapeHtml(lifecycle.certification || 'draft')} / Stage: ${escapeHtml(lifecycle.stage || 'dev')} / Steward: ${escapeHtml(lifecycle.steward || '{{ session.get("user") }}')}</div>
+        </div>
+        ${(lifecycle.history || []).length
+            ? (lifecycle.history || []).slice().reverse().map((entry) => `
+                <div class="profile-card">
+                    <div class="card-title">${escapeHtml(entry.stage || 'stage')} / ${escapeHtml(entry.certification || 'draft')}</div>
+                    <div class="card-detail">${escapeHtml(entry.notes || 'Lifecycle updated without a note.')}</div>
+                    <div class="card-detail" style="margin-top:8px;">Updated by ${escapeHtml(entry.updated_by || 'workspace')} at ${escapeHtml(entry.updated_at || '')}</div>
+                </div>
+            `).join('')
+            : '<div class="profile-card"><div class="card-detail">No lifecycle transitions have been recorded yet.</div></div>'}
     `;
 
     const activity = governance.activity || [];
@@ -1394,6 +1454,7 @@ function renderReportLibrary(reports) {
                 <div class="card-title">${escapeHtml(report.name)}</div>
                 <div class="card-detail">${escapeHtml(report.dataset_name || 'Dataset snapshot')} / ${report.section_count} sections</div>
                 <div class="card-detail">Owner: ${escapeHtml(report.owner || 'workspace')} / Access: ${escapeHtml(report.access_role || 'viewer')} / Shared with ${report.shared_count || 0} teammates</div>
+                <div class="card-detail">Lifecycle: ${escapeHtml(report.lifecycle?.certification || 'draft')} / ${escapeHtml(report.lifecycle?.stage || 'dev')}</div>
             </div>
             <div class="recommendation-actions">
                 <button class="btn btn-outline open-report-snapshot" data-report-id="${escapeHtml(report.id)}">Open Snapshot</button>
@@ -1840,6 +1901,27 @@ async function toggleRefreshJob(jobId, enabled) {
     await loadRefreshJobs();
 }
 
+async function updateDatasetLifecycle() {
+    const datasetId = '{{ dataset_record.id if dataset_record else "" }}';
+    const response = await fetch(`/artifacts/dataset/${encodeURIComponent(datasetId)}/lifecycle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
+            certification: document.getElementById('artifactCertification').value,
+            stage: document.getElementById('artifactStage').value,
+            steward: document.getElementById('artifactSteward').value,
+            notes: document.getElementById('artifactLifecycleNotes').value,
+        })
+    });
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to update dataset lifecycle');
+    }
+    document.getElementById('artifactLifecycleNotes').value = '';
+    await loadGovernanceSummary();
+}
+
 function renderSqlWorkbenchResult(result) {
     const status = document.getElementById('sqlWorkbenchStatus');
     const container = document.getElementById('sqlWorkbenchResults');
@@ -2257,6 +2339,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             showError(error.message);
         }
     });
+    document.getElementById('updateDatasetLifecycle').addEventListener('click', async () => {
+        try {
+            await updateDatasetLifecycle();
+            showSuccess('Dataset lifecycle updated.');
+        } catch (error) {
+            showError(error.message);
+        }
+    });
     document.getElementById('undoLastStep').addEventListener('click', async () => {
         try {
             await undoToParentDataset();
@@ -2298,6 +2388,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('measureResults').textContent = 'Saved measures could not be loaded.';
         document.getElementById('refreshJobsList').textContent = 'Refresh schedules could not be loaded.';
         document.getElementById('sqlWorkbenchResults').textContent = 'SQL workbench results could not be loaded.';
+        document.getElementById('lifecycleSummary').textContent = 'Lifecycle history could not be loaded.';
     }
 });
 </script>

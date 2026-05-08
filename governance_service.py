@@ -63,6 +63,7 @@ def build_governance_summary(
     severe_warnings = [alert for alert in alerts if alert.get('severity') == 'warning']
     pipeline_steps = dataset_record.get('metadata', {}).get('pipeline_steps', []) or []
     lineage_steps = dataset_record.get('metadata', {}).get('lineage_steps', []) or []
+    lifecycle = dataset_record.get('metadata', {}).get('lifecycle') or {}
 
     if severe_warnings:
         quality_risk = 'Medium'
@@ -84,6 +85,12 @@ def build_governance_summary(
             'dashboards': len(dashboards),
             'measures': len(measures),
             'reports': len(reports or []),
+        },
+        'lifecycle': {
+            'certification': lifecycle.get('certification', 'draft'),
+            'stage': lifecycle.get('stage', 'dev'),
+            'steward': lifecycle.get('steward') or dataset_record.get('owner'),
+            'history': lifecycle.get('history', [])[-5:],
         },
         'activity': audit_events[:8],
     }

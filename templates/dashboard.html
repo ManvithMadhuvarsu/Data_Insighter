@@ -748,6 +748,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <h4>${dashboard.name}</h4>
                     <p>${dashboard.chart_count} charts / updated ${new Date(dashboard.updated_at).toLocaleString()}</p>
                     <p>Owner: ${dashboard.owner || 'workspace'} / Access: ${dashboard.access_role || 'viewer'} / Shared with ${dashboard.shared_count || 0} teammates</p>
+                    <p>Lifecycle: ${dashboard.lifecycle?.certification || 'draft'} / ${dashboard.lifecycle?.stage || 'dev'}</p>
                     <button class="btn btn-outline load-saved-dashboard" data-id="${dashboard.id}">Load</button>
                 </div>
             `).join('');

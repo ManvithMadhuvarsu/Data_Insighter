@@ -1338,6 +1338,7 @@ function renderReportLibrary(reports) {
             <div>
                 <div class="card-title">${escapeHtml(report.name)}</div>
                 <div class="card-detail">${escapeHtml(report.dataset_name || 'Dataset snapshot')} / ${report.section_count} sections</div>
+                <div class="card-detail">Owner: ${escapeHtml(report.owner || 'workspace')} / Access: ${escapeHtml(report.access_role || 'viewer')} / Shared with ${report.shared_count || 0} teammates</div>
             </div>
             <div class="recommendation-actions">
                 <button class="btn btn-outline open-report-snapshot" data-report-id="${escapeHtml(report.id)}">Open Snapshot</button>

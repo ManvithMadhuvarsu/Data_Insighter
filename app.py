@@ -38,8 +38,12 @@ from workspace_store import (
     get_dashboard_record,
     get_dataset_record,
     get_report_record,
+    list_all_dashboard_records,
     update_dataset_record,
+    update_dashboard_record,
+    update_report_record,
     list_audit_events,
+    list_all_report_records,
     list_all_dataset_records,
     list_dashboard_records,
     list_dataset_records,
@@ -311,6 +315,133 @@ def get_accessible_dataset_record(username, dataset_id):
             continue
         if can_view_record(record, username):
             return record
+    return None
+
+
+def artifact_access_role(record, username, dataset_record=None):
+    direct_role = access_role(record, username)
+    if direct_role:
+        return direct_role
+    if dataset_record:
+        return access_role(dataset_record, username)
+    return None
+
+
+def list_accessible_dashboard_records(username, dataset_id=None):
+    owned = list_dashboard_records(username, dataset_id=dataset_id)
+    accessible = {}
+    dataset_cache = {}
+
+    for record in owned:
+        hydrated = dict(record)
+        hydrated['access_role'] = artifact_access_role(record, username) or 'owner'
+        accessible[record['id']] = hydrated
+
+    for record in list_all_dashboard_records(dataset_id=dataset_id):
+        if record.get('id') in accessible:
+            continue
+        linked_dataset = None
+        dataset_key = record.get('dataset_id')
+        if dataset_key:
+            linked_dataset = dataset_cache.get(dataset_key)
+            if linked_dataset is None:
+                linked_dataset = get_accessible_dataset_record(username, dataset_key)
+                dataset_cache[dataset_key] = linked_dataset
+        role = artifact_access_role(record, username, linked_dataset)
+        if not role:
+            continue
+        hydrated = dict(record)
+        hydrated['access_role'] = role
+        if linked_dataset and not access_role(record, username):
+            hydrated['metadata'] = {
+                **(record.get('metadata') or {}),
+                'inherited_access_dataset_id': linked_dataset['id'],
+            }
+        accessible[record['id']] = hydrated
+
+    return sorted(accessible.values(), key=lambda item: item.get('updated_at', ''), reverse=True)
+
+
+def get_accessible_dashboard_record(username, dashboard_id):
+    owned = get_dashboard_record(username, dashboard_id)
+    if owned:
+        hydrated = dict(owned)
+        hydrated['access_role'] = artifact_access_role(owned, username) or 'owner'
+        return hydrated
+
+    for record in list_all_dashboard_records():
+        if record.get('id') != dashboard_id:
+            continue
+        linked_dataset = get_accessible_dataset_record(username, record.get('dataset_id'))
+        role = artifact_access_role(record, username, linked_dataset)
+        if role:
+            hydrated = dict(record)
+            hydrated['access_role'] = role
+            if linked_dataset and not access_role(record, username):
+                hydrated['metadata'] = {
+                    **(record.get('metadata') or {}),
+                    'inherited_access_dataset_id': linked_dataset['id'],
+                }
+            return hydrated
+    return None
+
+
+def list_accessible_report_records(username, dataset_id=None):
+    owned = list_report_records(username, dataset_id=dataset_id)
+    accessible = {}
+    dataset_cache = {}
+
+    for record in owned:
+        hydrated = dict(record)
+        hydrated['access_role'] = artifact_access_role(record, username) or 'owner'
+        accessible[record['id']] = hydrated
+
+    for record in list_all_report_records(dataset_id=dataset_id):
+        if record.get('id') in accessible:
+            continue
+        linked_dataset = None
+        dataset_key = record.get('dataset_id')
+        if dataset_key:
+            linked_dataset = dataset_cache.get(dataset_key)
+            if linked_dataset is None:
+                linked_dataset = get_accessible_dataset_record(username, dataset_key)
+                dataset_cache[dataset_key] = linked_dataset
+        role = artifact_access_role(record, username, linked_dataset)
+        if not role:
+            continue
+        hydrated = dict(record)
+        hydrated['access_role'] = role
+        if linked_dataset and not access_role(record, username):
+            hydrated['metadata'] = {
+                **(record.get('metadata') or {}),
+                'inherited_access_dataset_id': linked_dataset['id'],
+            }
+        accessible[record['id']] = hydrated
+
+    return sorted(accessible.values(), key=lambda item: item.get('updated_at', ''), reverse=True)
+
+
+def get_accessible_report_record(username, report_id):
+    owned = get_report_record(username, report_id)
+    if owned:
+        hydrated = dict(owned)
+        hydrated['access_role'] = artifact_access_role(owned, username) or 'owner'
+        return hydrated
+
+    for record in list_all_report_records():
+        if record.get('id') != report_id:
+            continue
+        linked_dataset = get_accessible_dataset_record(username, record.get('dataset_id'))
+        role = artifact_access_role(record, username, linked_dataset)
+        if role:
+            hydrated = dict(record)
+            hydrated['access_role'] = role
+            if linked_dataset and not access_role(record, username):
+                hydrated['metadata'] = {
+                    **(record.get('metadata') or {}),
+                    'inherited_access_dataset_id': linked_dataset['id'],
+                }
+            return hydrated
     return None
 
 
@@ -654,7 +785,7 @@ def executive_report():
 @login_required
 def report_library():
     dataset_id = request.args.get('dataset_id') or session.get('current_dataset_id')
-    reports = list_report_records(session['user'], dataset_id=dataset_id)
+    reports = list_accessible_report_records(session['user'], dataset_id=dataset_id)
     return jsonify({
         'success': True,
         'reports': [
@@ -663,9 +794,12 @@ def report_library():
                 'name': report['name'],
                 'dataset_id': report.get('dataset_id'),
                 'dataset_name': report.get('report', {}).get('dataset_name'),
+                'owner': report.get('owner'),
+                'access_role': report.get('access_role') or artifact_access_role(report, session['user']) or 'viewer',
                 'created_at': report['created_at'],
                 'updated_at': report['updated_at'],
                 'section_count': len(report.get('report', {}).get('sections', [])),
+                'shared_count': len(shared_entries(report)),
             }
             for report in reports
         ],
@@ -675,7 +809,7 @@ def report_library():
 @app.route('/reports/<report_id>')
 @login_required
 def get_report(report_id):
-    record = get_report_record(session['user'], report_id)
+    record = get_accessible_report_record(session['user'], report_id)
     if not record:
         return error_response('Report snapshot not found.', 404)
     return jsonify({'success': True, 'report': record})
@@ -701,6 +835,11 @@ def save_report_snapshot():
             name=name,
             dataset_id=dataset_record['id'],
             report_payload=report,
+            metadata={
+                'shared_with': shared_entries(dataset_record),
+                'source_dataset_id': dataset_record['id'],
+                'source_dataset_owner': dataset_record.get('owner'),
+            },
         )
         record_audit_event(
             'report_saved',
@@ -712,6 +851,43 @@ def save_report_snapshot():
         return jsonify({'success': True, 'report': record})
     except Exception as e:
         return error_response(str(e), 400)
+
+
+@app.route('/reports/<report_id>/share', methods=['POST'])
+@login_required
+def share_report_record(report_id):
+    if not validate_csrf_token():
+        return error_response('Invalid request token', 400)
+
+    record = get_accessible_report_record(session['user'], report_id)
+    if not record:
+        return error_response('Report snapshot not found.', 404)
+    if not can_edit_record(record, session['user']):
+        return error_response('You do not have permission to share this report snapshot.', 403)
+
+    payload = request.get_json(silent=True) or {}
+    target_user = (payload.get('user') or '').strip()
+    role = (payload.get('role') or 'viewer').strip().lower()
+    users = _load_users()
+
+    if not target_user or target_user not in users:
+        return error_response('Choose a valid teammate to share this report with.', 400)
+    if target_user == session['user']:
+        return error_response('This report is already available to you.', 400)
+
+    updated_record = update_report_record(
+        record['owner'],
+        record['id'],
+        {'metadata': with_shared_user(record, target_user, role)},
+    )
+    record_audit_event(
+        'report_shared',
+        artifact_type='report',
+        dataset_id=updated_record.get('dataset_id'),
+        artifact_id=updated_record['id'],
+        details={'target_user': target_user, 'role': role},
+    )
+    return jsonify({'success': True, 'report': updated_record})
 
 
 @app.route('/governance_summary')
@@ -1585,7 +1761,7 @@ def clear_session():
 @login_required
 def dashboard_library():
     dataset_id = request.args.get('dataset_id') or session.get('current_dataset_id')
-    dashboards = list_dashboard_records(session['user'], dataset_id=dataset_id)
+    dashboards = list_accessible_dashboard_records(session['user'], dataset_id=dataset_id)
     return jsonify({
         'success': True,
         'dashboards': [
@@ -1593,9 +1769,12 @@ def dashboard_library():
                 'id': dashboard['id'],
                 'name': dashboard['name'],
                 'dataset_id': dashboard.get('dataset_id'),
+                'owner': dashboard.get('owner'),
+                'access_role': dashboard.get('access_role') or artifact_access_role(dashboard, session['user']) or 'viewer',
                 'created_at': dashboard['created_at'],
                 'updated_at': dashboard['updated_at'],
                 'chart_count': len(dashboard.get('dashboard_viz', [])),
+                'shared_count': len(shared_entries(dashboard)),
             }
             for dashboard in dashboards
         ]
@@ -1623,6 +1802,10 @@ def save_dashboard_record():
         dataset_id=session.get('current_dataset_id'),
         dashboard_viz=dashboard_viz,
         dashboard_state=dashboard_state,
+        metadata={
+            'shared_with': shared_entries(current_dataset_record()) if current_dataset_record() else [],
+            'source_dataset_id': session.get('current_dataset_id'),
+        },
     )
     record_audit_event(
         'dashboard_saved',
@@ -1636,10 +1819,47 @@ def save_dashboard_record():
 @app.route('/dashboards/<dashboard_id>')
 @login_required
 def get_dashboard(dashboard_id):
-    record = get_dashboard_record(session['user'], dashboard_id)
+    record = get_accessible_dashboard_record(session['user'], dashboard_id)
     if not record:
         return error_response('Dashboard not found.', 404)
     return jsonify({'success': True, 'dashboard': record})
+
+
+@app.route('/dashboards/<dashboard_id>/share', methods=['POST'])
+@login_required
+def share_dashboard_record(dashboard_id):
+    if not validate_csrf_token():
+        return error_response('Invalid request token', 400)
+
+    record = get_accessible_dashboard_record(session['user'], dashboard_id)
+    if not record:
+        return error_response('Dashboard not found.', 404)
+    if not can_edit_record(record, session['user']):
+        return error_response('You do not have permission to share this dashboard.', 403)
+
+    payload = request.get_json(silent=True) or {}
+    target_user = (payload.get('user') or '').strip()
+    role = (payload.get('role') or 'viewer').strip().lower()
+    users = _load_users()
+
+    if not target_user or target_user not in users:
+        return error_response('Choose a valid teammate to share this dashboard with.', 400)
+    if target_user == session['user']:
+        return error_response('This dashboard is already available to you.', 400)
+
+    updated_record = update_dashboard_record(
+        record['owner'],
+        record['id'],
+        {'metadata': with_shared_user(record, target_user, role)},
+    )
+    record_audit_event(
+        'dashboard_shared',
+        artifact_type='dashboard',
+        dataset_id=updated_record.get('dataset_id'),
+        artifact_id=updated_record['id'],
+        details={'target_user': target_user, 'role': role},
+    )
+    return jsonify({'success': True, 'dashboard': updated_record})
 
 @app.route('/starter_dashboard', methods=['POST'])
 @login_required

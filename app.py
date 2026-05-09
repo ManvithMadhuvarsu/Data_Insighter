@@ -50,6 +50,7 @@ from workspace_store import (
     get_refresh_job_record,
     get_report_record,
     list_all_dashboard_records,
+    list_all_measure_records,
     list_all_query_records,
     list_all_refresh_job_records,
     list_refresh_job_records,
@@ -60,6 +61,7 @@ from workspace_store import (
     update_refresh_job_record,
     update_report_record,
     list_audit_events,
+    list_all_audit_events,
     list_all_report_records,
     list_all_dataset_records,
     list_dashboard_records,
@@ -539,6 +541,24 @@ def get_accessible_query_record(username, query_id):
                 }
             return hydrated
     return None
+
+
+def list_accessible_measure_records(username, dataset_id=None):
+    owned = list_measure_records(username, dataset_id=dataset_id)
+    accessible = {record['id']: dict(record, access_role='owner') for record in owned}
+
+    for record in list_all_measure_records(dataset_id=dataset_id):
+        if record.get('id') in accessible:
+            continue
+        linked_dataset = get_accessible_dataset_record(username, record.get('dataset_id'))
+        role = artifact_access_role(record, username, linked_dataset)
+        if not role:
+            continue
+        hydrated = dict(record)
+        hydrated['access_role'] = role
+        accessible[record['id']] = hydrated
+
+    return sorted(accessible.values(), key=lambda item: item.get('updated_at', ''), reverse=True)
 
 
 def artifact_lifecycle(record):
@@ -1056,11 +1076,22 @@ def governance_summary():
         processor = DataProcessor(dataframe=frame)
         summary = processor.get_analysis_summary()
         dataset_id = dataset_record['id']
-        dashboards = list_dashboard_records(session['user'], dataset_id=dataset_id)
-        measures = list_measure_records(session['user'], dataset_id=dataset_id)
-        reports = list_report_records(session['user'], dataset_id=dataset_id)
-        activity = list_audit_events(session['user'], dataset_id=dataset_id, limit=12)
-        governance = build_governance_summary(dataset_record, summary, activity, dashboards, measures, reports)
+        dashboards = list_accessible_dashboard_records(session['user'], dataset_id=dataset_id)
+        measures = list_accessible_measure_records(session['user'], dataset_id=dataset_id)
+        reports = list_accessible_report_records(session['user'], dataset_id=dataset_id)
+        queries = list_accessible_query_records(session['user'], dataset_id=dataset_id)
+        refresh_jobs = [job for job in list_all_refresh_job_records(dataset_id=dataset_id) if can_view_record(dataset_record, session['user'])]
+        activity = list_all_audit_events(dataset_id=dataset_id, limit=12)
+        governance = build_governance_summary(
+            dataset_record,
+            summary,
+            activity,
+            dashboards,
+            measures,
+            reports,
+            queries=queries,
+            refresh_jobs=refresh_jobs,
+        )
         return jsonify({
             'success': True,
             'governance': governance,
@@ -1698,6 +1729,14 @@ def workspace_catalog():
     datasets = []
     for record in list_accessible_dataset_records(session['user']):
         freshness = dataset_freshness(session['user'], record)
+        dataset_id = record['id']
+        downstream = {
+            'dashboards': len(list_accessible_dashboard_records(session['user'], dataset_id=dataset_id)),
+            'reports': len(list_accessible_report_records(session['user'], dataset_id=dataset_id)),
+            'queries': len(list_accessible_query_records(session['user'], dataset_id=dataset_id)),
+            'measures': len(list_accessible_measure_records(session['user'], dataset_id=dataset_id)),
+            'refresh_jobs': len([job for job in list_all_refresh_job_records(dataset_id=dataset_id) if can_view_record(record, session['user'])]),
+        }
         datasets.append({
             'id': record['id'],
             'display_name': record.get('metadata', {}).get('display_name', record['source_name']),
@@ -1713,6 +1752,8 @@ def workspace_catalog():
             'access_role': access_role(record, session['user']),
             'shared_count': len(shared_entries(record)),
             'row_policy_count': len(row_policies(record)),
+            'lifecycle': artifact_lifecycle(record),
+            'downstream_assets': downstream,
         })
     return jsonify({'success': True, 'datasets': datasets})
 
@@ -1967,7 +2008,7 @@ def create_joined_dataset():
 @app.route('/measures')
 @login_required
 def measures():
-    records = list_measure_records(session['user'], dataset_id=session.get('current_dataset_id'))
+    records = list_accessible_measure_records(session['user'], dataset_id=session.get('current_dataset_id'))
     return jsonify({'success': True, 'measures': records})
 
 @app.route('/measures/create', methods=['POST'])

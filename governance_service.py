@@ -57,6 +57,8 @@ def build_governance_summary(
     dashboards: List[Dict[str, Any]],
     measures: List[Dict[str, Any]],
     reports: List[Dict[str, Any]] | None = None,
+    queries: List[Dict[str, Any]] | None = None,
+    refresh_jobs: List[Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
     sensitivity = infer_sensitivity_label(analysis_summary)
     alerts = analysis_summary.get('quality_alerts', []) or []
@@ -85,6 +87,12 @@ def build_governance_summary(
             'dashboards': len(dashboards),
             'measures': len(measures),
             'reports': len(reports or []),
+            'queries': len(queries or []),
+            'refresh_jobs': len(refresh_jobs or []),
+        },
+        'collaboration': {
+            'shared_users': len(dataset_record.get('metadata', {}).get('shared_with', []) or []),
+            'row_policies': len(dataset_record.get('metadata', {}).get('row_policies', []) or []),
         },
         'lifecycle': {
             'certification': lifecycle.get('certification', 'draft'),

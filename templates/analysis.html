@@ -1268,6 +1268,7 @@ function renderGovernanceSummary(governance) {
     const sensitivity = governance.sensitivity || { label: 'Unknown', reasons: [] };
     const pipeline = governance.pipeline || {};
     const downstream = governance.downstream_assets || {};
+    const collaboration = governance.collaboration || {};
     const lifecycle = governance.lifecycle || { certification: 'draft', stage: 'dev', steward: '', history: [] };
 
     summaryContainer.innerHTML = `
@@ -1284,7 +1285,13 @@ function renderGovernanceSummary(governance) {
         <div class="profile-card">
             <div class="card-title">Downstream assets</div>
             <div class="card-detail">${downstream.dashboards || 0} dashboard(s) / ${downstream.measures || 0} reusable measure(s) / ${downstream.reports || 0} saved report(s)</div>
+            <div class="card-detail" style="margin-top:8px;">${downstream.queries || 0} saved query(s) / ${downstream.refresh_jobs || 0} refresh schedule(s)</div>
             <div class="card-detail" style="margin-top:8px;">Changes to this dataset may affect those saved artifacts.</div>
+        </div>
+        <div class="profile-card">
+            <div class="card-title">Collaboration</div>
+            <div class="card-detail">${collaboration.shared_users || 0} teammate(s) currently shared / ${collaboration.row_policies || 0} row-level security rule(s)</div>
+            <div class="card-detail" style="margin-top:8px;">Use sharing and policy controls to govern who sees which slices.</div>
         </div>
     `;
 

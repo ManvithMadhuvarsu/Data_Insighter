@@ -839,6 +839,19 @@ def list_audit_events(
     )
 
 
+def list_all_audit_events(
+    dataset_id: Optional[str] = None,
+    artifact_id: Optional[str] = None,
+    limit: int = 50,
+) -> List[Dict[str, Any]]:
+    return _list_records(
+        'audit_events',
+        dataset_id=dataset_id,
+        artifact_id=artifact_id,
+        limit=limit,
+    )
+
+
 def create_refresh_job_record(
     username: str,
     dataset_id: str,

@@ -198,8 +198,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 <h3>${dataset.display_name}</h3>
                 <span class="catalog-stat">${dataset.freshness?.status || 'current'}</span>
                 <p>${dataset.access_role || 'owner'} access / owner ${dataset.owner || 'workspace'}</p>
+                <p>Lifecycle: ${dataset.lifecycle?.certification || 'draft'} / ${dataset.lifecycle?.stage || 'dev'}</p>
                 <p>${dataset.row_count} rows / ${dataset.column_count} columns / ${dataset.pipeline_step_count} pipeline steps</p>
                 <p>${dataset.shared_count || 0} shared collaborator(s) / ${dataset.row_policy_count || 0} row policy rule(s)</p>
+                <p>${dataset.downstream_assets?.dashboards || 0} dashboard(s) / ${dataset.downstream_assets?.reports || 0} report(s) / ${dataset.downstream_assets?.queries || 0} query(s) / ${dataset.downstream_assets?.refresh_jobs || 0} schedule(s)</p>
                 <p>${dataset.freshness?.reason || 'No freshness issues detected.'}</p>
                 <button class="btn btn-primary open-workspace-dataset" data-id="${dataset.id}">
                     Open Dataset

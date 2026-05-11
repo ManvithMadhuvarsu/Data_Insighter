@@ -15,12 +15,14 @@ from insight_engine import (
     segment_driver_insights,
     variance_explanation_insights,
 )
-from semantic_model import infer_dataset_semantics
+from semantic_model import infer_dataset_semantics, summarize_semantic_model
 
 
 class DataProcessor:
     def __init__(self, filepath: str | None = None, dataframe: pd.DataFrame | None = None):
         self.filepath = filepath
+        self._semantic_profiles_cache: List[Dict[str, Any]] | None = None
+        self._semantic_model_cache: Dict[str, Any] | None = None
         if dataframe is not None:
             self.df = prepare_dataframe(dataframe)
         elif filepath:
@@ -65,7 +67,14 @@ class DataProcessor:
         return candidates
 
     def _semantic_profiles(self) -> List[Dict[str, Any]]:
-        return infer_dataset_semantics(self.df)
+        if self._semantic_profiles_cache is None:
+            self._semantic_profiles_cache = infer_dataset_semantics(self.df)
+        return self._semantic_profiles_cache
+
+    def _semantic_model_summary(self) -> Dict[str, Any]:
+        if self._semantic_model_cache is None:
+            self._semantic_model_cache = summarize_semantic_model(self.df, self._semantic_profiles())
+        return self._semantic_model_cache
 
     def _semantic_groups(self) -> Dict[str, List[str]]:
         groups: Dict[str, List[str]] = {
@@ -424,6 +433,7 @@ class DataProcessor:
         advanced_insights = self._advanced_insights()
         key_insights = sorted(foundational_insights + advanced_insights, key=lambda item: item['score'], reverse=True)[:8]
         semantic_profiles = self._semantic_profiles()
+        semantic_model = self._semantic_model_summary()
         quality_alerts = self._quality_alerts()
 
         return {
@@ -442,5 +452,6 @@ class DataProcessor:
             'recommended_visualizations': self._recommended_visualizations(),
             'column_profiles': self._column_profiles(),
             'semantic_profiles': semantic_profiles,
+            'semantic_model': semantic_model,
             'executive_takeaways': build_executive_takeaways(key_insights, quality_alerts),
         }

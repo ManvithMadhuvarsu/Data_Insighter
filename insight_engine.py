@@ -5,6 +5,11 @@ from typing import Any, Dict, List
 import numpy as np
 import pandas as pd
 from scipy import stats
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
 
 
 def build_explanations(insight: Dict[str, Any], why: List[str]) -> Dict[str, Any]:
@@ -453,6 +458,108 @@ def retention_cohort_insights(
         "Cohorts were inferred from each identifier's first observed month.",
         'Repeat activity is estimated by checking whether an entity appears again in later periods.',
     ], sample_size=cohort_size, effect_size=value / 100, stability=min(1.0, value / 100))]
+
+
+def model_driver_insights(df: pd.DataFrame, dimensions: List[str], measures: List[str]) -> List[Dict[str, Any]]:
+    findings: List[Dict[str, Any]] = []
+    usable_dimensions = [column for column in dimensions if df[column].nunique(dropna=True) <= 15][:4]
+    if not usable_dimensions or len(measures) < 2:
+        return findings
+
+    for target_measure in measures[:2]:
+        peer_measures = [column for column in measures if column != target_measure][:3]
+        feature_columns = usable_dimensions + peer_measures
+        if not feature_columns:
+            continue
+
+        working = df[feature_columns + [target_measure]].copy()
+        working[target_measure] = pd.to_numeric(working[target_measure], errors='coerce')
+        working = working.dropna(subset=[target_measure])
+        if len(working) < 30 or working[target_measure].nunique() < 8:
+            continue
+
+        categorical_features = [column for column in usable_dimensions if column in working.columns]
+        numeric_features = [column for column in peer_measures if column in working.columns]
+        if not categorical_features and not numeric_features:
+            continue
+
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ('cat', Pipeline([
+                    ('imputer', SimpleImputer(strategy='most_frequent')),
+                    ('encoder', OneHotEncoder(handle_unknown='ignore')),
+                ]), categorical_features),
+                ('num', Pipeline([
+                    ('imputer', SimpleImputer(strategy='median')),
+                ]), numeric_features),
+            ],
+            remainder='drop',
+        )
+
+        model = RandomForestRegressor(
+            n_estimators=180,
+            random_state=42,
+            min_samples_leaf=3,
+        )
+
+        pipeline = Pipeline([
+            ('preprocess', preprocessor),
+            ('model', model),
+        ])
+
+        try:
+            pipeline.fit(working[feature_columns], working[target_measure])
+        except Exception:
+            continue
+
+        r_squared = float(pipeline.score(working[feature_columns], working[target_measure]))
+        if not np.isfinite(r_squared) or r_squared < 0.2:
+            continue
+
+        cat_names = []
+        if categorical_features:
+            encoder = pipeline.named_steps['preprocess'].named_transformers_['cat'].named_steps['encoder']
+            cat_names = list(encoder.get_feature_names_out(categorical_features))
+        feature_names = cat_names + numeric_features
+        importances = pipeline.named_steps['model'].feature_importances_
+        if not len(feature_names) or not len(importances):
+            continue
+
+        aggregated: Dict[str, float] = {}
+        for name, importance in zip(feature_names, importances):
+            matched_column = next((column for column in categorical_features if name.startswith(f'{column}_')), name)
+            aggregated[matched_column] = aggregated.get(matched_column, 0.0) + float(importance)
+
+        ranked = sorted(aggregated.items(), key=lambda item: item[1], reverse=True)
+        if not ranked:
+            continue
+        top_feature, top_importance = ranked[0]
+        if top_importance < 0.18:
+            continue
+
+        chart_type = 'bar' if top_feature in categorical_features else 'scatter'
+        chart_columns = [top_feature, target_measure] if chart_type == 'scatter' else [top_feature, target_measure]
+
+        findings.append(enrich_with_statistics({
+            'kind': 'model_driver',
+            'title': f'{top_feature} looks like the strongest modeled driver of {target_measure}',
+            'detail': f'The driver model explains about {r_squared * 100:.1f}% of variation in {target_measure}, with {top_feature} contributing the highest importance ({top_importance * 100:.1f}%).',
+            'score': round(top_importance * 100, 3),
+            'stat': f'R² = {r_squared:.2f} / top importance = {top_importance * 100:.1f}%',
+            'recommended_chart': {
+                'title': f'{target_measure} by {top_feature}',
+                'description': 'Review the strongest modeled driver alongside the target metric to validate the pattern visually.',
+                'type': chart_type,
+                'columns': chart_columns,
+                'sample_percentage': 100,
+            }
+        }, [
+            'A lightweight random-forest model was fitted on the current dataset using the strongest segment columns and peer numeric drivers.',
+            'This is directional and not causal, but it helps prioritize which factors deserve deeper analyst review next.',
+        ], sample_size=len(working), effect_size=max(r_squared, top_importance), stability=min(1.0, r_squared)))
+
+    findings.sort(key=lambda item: (item.get('priority_score', 0), item.get('score', 0)), reverse=True)
+    return findings[:1]
 
 
 def build_executive_takeaways(insights: List[Dict[str, Any]], quality_alerts: List[Dict[str, Any]]) -> List[str]:

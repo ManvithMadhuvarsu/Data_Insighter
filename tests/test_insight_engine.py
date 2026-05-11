@@ -3,6 +3,7 @@ import pandas as pd
 from insight_engine import (
     anomaly_insights,
     funnel_insights,
+    model_driver_insights,
     retention_cohort_insights,
     segment_driver_insights,
     variance_explanation_insights,
@@ -85,3 +86,20 @@ def test_anomaly_insights_use_robust_outlier_detection():
     assert insights
     assert insights[0]['kind'] == 'anomaly'
     assert insights[0]['stat'].startswith('1 outliers')
+
+
+def test_model_driver_insights_surface_top_predictor():
+    rows = []
+    for index in range(60):
+        ad_spend = 50 + index * 2
+        region = 'North' if index % 3 == 0 else 'South'
+        revenue = ad_spend * 4 + (40 if region == 'North' else 5)
+        rows.append({'region': region, 'ad_spend': ad_spend, 'revenue': revenue})
+    df = pd.DataFrame(rows)
+
+    insights = model_driver_insights(df, ['region'], ['revenue', 'ad_spend'])
+
+    assert insights
+    assert insights[0]['kind'] == 'model_driver'
+    assert 'R²' in insights[0]['stat']
+    assert insights[0]['confidence_score'] >= 60

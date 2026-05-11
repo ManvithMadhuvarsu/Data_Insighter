@@ -12,6 +12,7 @@ from insight_engine import (
     contribution_insights,
     enrich_with_statistics,
     funnel_insights,
+    model_driver_insights,
     retention_cohort_insights,
     seasonality_insights,
     segment_driver_insights,
@@ -433,6 +434,7 @@ class DataProcessor:
             + seasonality_insights(self.df, datetimes, measures)
             + variance_explanation_insights(self.df, datetimes, dimensions, measures)
             + funnel_insights(self.df, measures)
+            + model_driver_insights(self.df, dimensions, measures)
             + retention_cohort_insights(self.df, datetimes, identifiers)
         )
         findings.sort(key=lambda item: (item.get('priority_score', 0), item.get('confidence_score', 0), item.get('score', 0)), reverse=True)

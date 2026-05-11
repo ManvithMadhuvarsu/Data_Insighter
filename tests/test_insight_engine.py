@@ -1,6 +1,12 @@
 import pandas as pd
 
-from insight_engine import funnel_insights, retention_cohort_insights, variance_explanation_insights
+from insight_engine import (
+    anomaly_insights,
+    funnel_insights,
+    retention_cohort_insights,
+    segment_driver_insights,
+    variance_explanation_insights,
+)
 
 
 def test_funnel_insights_detect_weak_stage_conversion():
@@ -29,6 +35,7 @@ def test_variance_explanation_identifies_segment_delta():
     assert insights
     assert insights[0]['kind'] == 'variance_explanation'
     assert 'A' in insights[0]['detail']
+    assert insights[0]['confidence_score'] >= 0
 
 
 def test_retention_cohort_insights_find_repeat_activity():
@@ -51,3 +58,30 @@ def test_retention_cohort_insights_find_repeat_activity():
 
     assert insights
     assert insights[0]['kind'] == 'retention_cohort'
+    assert insights[0]['confidence_label'] in {'low', 'medium', 'high'}
+
+
+def test_segment_driver_insights_include_statistical_context():
+    df = pd.DataFrame({
+        'segment': ['A'] * 12 + ['B'] * 12 + ['C'] * 12,
+        'revenue': [220, 210, 215, 225, 218, 222, 216, 230, 228, 221, 219, 224] + [140, 135, 145, 138, 142, 136, 144, 141, 139, 137, 143, 140] + [90, 88, 92, 95, 91, 89, 93, 94, 90, 87, 96, 92],
+    })
+
+    insights = segment_driver_insights(df, ['segment'], ['revenue'])
+
+    assert insights
+    assert insights[0]['kind'] == 'segment_driver'
+    assert insights[0]['p_value'] is not None
+    assert insights[0]['confidence_score'] >= 60
+
+
+def test_anomaly_insights_use_robust_outlier_detection():
+    df = pd.DataFrame({
+        'revenue': [100, 101, 99, 103, 102, 98, 97, 101, 100, 99, 102, 450],
+    })
+
+    insights = anomaly_insights(df, ['revenue'])
+
+    assert insights
+    assert insights[0]['kind'] == 'anomaly'
+    assert insights[0]['stat'].startswith('1 outliers')

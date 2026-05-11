@@ -3,12 +3,14 @@ from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 
 from dataset_runtime import load_prepared_dataframe, prepare_dataframe
 from insight_engine import (
     anomaly_insights,
     build_executive_takeaways,
     contribution_insights,
+    enrich_with_statistics,
     funnel_insights,
     retention_cohort_insights,
     seasonality_insights,
@@ -75,6 +77,13 @@ class DataProcessor:
         if self._semantic_model_cache is None:
             self._semantic_model_cache = summarize_semantic_model(self.df, self._semantic_profiles())
         return self._semantic_model_cache
+
+    def _semantic_profile_map(self) -> Dict[str, Dict[str, Any]]:
+        return {profile['name']: profile for profile in self._semantic_profiles()}
+
+    def _measure_aggregation(self, column: str) -> str:
+        profile = self._semantic_profile_map().get(column, {})
+        return profile.get('default_aggregation') or 'sum'
 
     def _semantic_groups(self) -> Dict[str, List[str]]:
         groups: Dict[str, List[str]] = {
@@ -190,17 +199,19 @@ class DataProcessor:
         if len(numeric_columns) < 2:
             return []
 
-        corr = self.df[numeric_columns].corr(numeric_only=True)
         findings = []
 
         for idx, left in enumerate(numeric_columns):
             for right in numeric_columns[idx + 1:]:
-                value = corr.loc[left, right]
+                pair = self.df[[left, right]].dropna()
+                if len(pair) < 12:
+                    continue
+                value, p_value = stats.pearsonr(pair[left], pair[right])
                 if pd.isna(value):
                     continue
                 strength = abs(float(value))
-                if strength >= 0.6:
-                    findings.append({
+                if strength >= 0.45 and (not np.isfinite(p_value) or p_value <= 0.1):
+                    findings.append(enrich_with_statistics({
                         'kind': 'correlation',
                         'title': f'{left} and {right} move together',
                         'detail': f'The correlation is {value:.2f}, which is strong enough to investigate a business relationship.',
@@ -213,9 +224,12 @@ class DataProcessor:
                             'columns': [left, right],
                             'sample_percentage': 100,
                         }
-                    })
+                    }, [
+                        'Correlation is measured on rows where both numeric fields are present.',
+                        'This surfaces linear relationships that are strong enough to influence forecasting, segmentation, or KPI interpretation.',
+                    ], sample_size=len(pair), effect_size=strength, p_value=p_value))
 
-        findings.sort(key=lambda item: item['score'], reverse=True)
+        findings.sort(key=lambda item: (item.get('priority_score', 0), item.get('score', 0)), reverse=True)
         return findings[:3]
 
     def _distribution_insights(self) -> List[Dict[str, Any]]:
@@ -228,7 +242,7 @@ class DataProcessor:
             skewness = series.skew()
             if pd.notna(skewness) and abs(float(skewness)) >= 1:
                 direction = 'right-skewed' if skewness > 0 else 'left-skewed'
-                findings.append({
+                findings.append(enrich_with_statistics({
                     'kind': 'distribution',
                     'title': f'{column} has a {direction} distribution',
                     'detail': 'The mean may be less representative than the median here, and a few values are likely stretching the range.',
@@ -241,9 +255,12 @@ class DataProcessor:
                         'columns': [column],
                         'sample_percentage': 100,
                     }
-                })
+                }, [
+                    'Distribution shape is evaluated using skewness after dropping null values.',
+                    'Highly skewed measures often need median-based interpretation or outlier review before being used in executive KPIs.',
+                ], sample_size=len(series), effect_size=min(abs(float(skewness)) / 2.5, 2.0), stability=min(1.0, abs(float(skewness)) / 3)))
 
-        findings.sort(key=lambda item: item['score'], reverse=True)
+        findings.sort(key=lambda item: (item.get('priority_score', 0), item.get('score', 0)), reverse=True)
         return findings[:2]
 
     def _categorical_insights(self) -> List[Dict[str, Any]]:
@@ -261,9 +278,10 @@ class DataProcessor:
             top_label = top_counts.index[0]
             top_count = int(top_counts.iloc[0])
             dominance = self._safe_ratio(top_count, len(series))
+            entropy = stats.entropy(top_counts.values / top_counts.values.sum()) if len(top_counts) > 1 else 0
 
             if dominance >= 35:
-                findings.append({
+                findings.append(enrich_with_statistics({
                     'kind': 'categorical',
                     'title': f"{column} is concentrated in '{top_label}'",
                     'detail': f"The top category contributes {dominance}% of observed rows, which suggests an imbalance worth explaining.",
@@ -276,9 +294,12 @@ class DataProcessor:
                         'columns': [column],
                         'sample_percentage': 100,
                     }
-                })
+                }, [
+                    'Category concentration is measured from the share of the top observed group.',
+                    'Low diversity across categories can point to channel concentration, customer mix skew, or operational imbalance.',
+                ], sample_size=len(series), effect_size=max(dominance / 100, 1 - min(float(entropy), 3.0) / 3.0), stability=min(1.0, dominance / 70)))
 
-        findings.sort(key=lambda item: item['score'], reverse=True)
+        findings.sort(key=lambda item: (item.get('priority_score', 0), item.get('score', 0)), reverse=True)
         return findings[:2]
 
     def _time_insights(self) -> List[Dict[str, Any]]:
@@ -294,19 +315,33 @@ class DataProcessor:
             if working.empty:
                 continue
 
+            working[date_column] = pd.to_datetime(working[date_column], errors='coerce')
             working = working.sort_values(date_column)
             for numeric_column in numeric_columns[:5]:
                 series = working[[date_column, numeric_column]].dropna()
                 if len(series) < 8:
                     continue
+                aggregation = self._measure_aggregation(numeric_column)
+                if aggregation == 'average':
+                    trend_series = series.groupby(date_column)[numeric_column].mean().sort_index()
+                else:
+                    trend_series = series.groupby(date_column)[numeric_column].sum().sort_index()
+                if len(trend_series) < 5:
+                    continue
 
-                trend_delta = float(series[numeric_column].iloc[-1] - series[numeric_column].iloc[0])
-                trend_pct = self._safe_ratio(trend_delta, abs(series[numeric_column].iloc[0])) if series[numeric_column].iloc[0] != 0 else 0.0
-                findings.append({
+                x = np.arange(len(trend_series))
+                regression = stats.linregress(x, trend_series.to_numpy(dtype=float))
+                trend_delta = float(trend_series.iloc[-1] - trend_series.iloc[0])
+                baseline = abs(float(trend_series.iloc[0])) or 1.0
+                trend_pct = round((trend_delta / baseline) * 100, 2)
+                slope_strength = abs(float(regression.rvalue)) if np.isfinite(regression.rvalue) else 0.0
+                if slope_strength < 0.35 and abs(trend_pct) < 10:
+                    continue
+                findings.append(enrich_with_statistics({
                     'kind': 'trend',
                     'title': f'{numeric_column} changes over time',
-                    'detail': f'From the first to last recorded period, the metric moves by {round(trend_delta, 2)}.',
-                    'score': abs(trend_delta),
+                    'detail': f'From the first to last recorded period, the metric moves by {round(trend_delta, 2)} ({trend_pct}%).',
+                    'score': abs(trend_pct) if abs(trend_pct) > abs(trend_delta) else abs(trend_delta),
                     'stat': f'change = {round(trend_delta, 2)} ({trend_pct}%)',
                     'recommended_chart': {
                         'title': f'{numeric_column} over time',
@@ -315,9 +350,12 @@ class DataProcessor:
                         'columns': [date_column, numeric_column],
                         'sample_percentage': 100,
                     }
-                })
+                }, [
+                    'Trend direction is measured on period-level aggregates rather than raw row order.',
+                    'The confidence score blends the number of observed periods with the consistency of the fitted trend.',
+                ], sample_size=len(trend_series), effect_size=max(slope_strength, abs(trend_pct) / 100), p_value=regression.pvalue))
 
-        findings.sort(key=lambda item: item['score'], reverse=True)
+        findings.sort(key=lambda item: (item.get('priority_score', 0), item.get('score', 0)), reverse=True)
         return findings[:2]
 
     def _recommended_visualizations(self) -> List[Dict[str, Any]]:
@@ -397,7 +435,7 @@ class DataProcessor:
             + funnel_insights(self.df, measures)
             + retention_cohort_insights(self.df, datetimes, identifiers)
         )
-        findings.sort(key=lambda item: item['score'], reverse=True)
+        findings.sort(key=lambda item: (item.get('priority_score', 0), item.get('confidence_score', 0), item.get('score', 0)), reverse=True)
         return findings[:6]
 
     def get_data_info(self) -> Dict[str, Any]:
@@ -431,7 +469,11 @@ class DataProcessor:
             + self._distribution_insights()
         )
         advanced_insights = self._advanced_insights()
-        key_insights = sorted(foundational_insights + advanced_insights, key=lambda item: item['score'], reverse=True)[:8]
+        key_insights = sorted(
+            foundational_insights + advanced_insights,
+            key=lambda item: (item.get('priority_score', 0), item.get('confidence_score', 0), item.get('score', 0)),
+            reverse=True,
+        )[:8]
         semantic_profiles = self._semantic_profiles()
         semantic_model = self._semantic_model_summary()
         quality_alerts = self._quality_alerts()

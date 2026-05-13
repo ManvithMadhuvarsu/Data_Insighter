@@ -1,3 +1,8 @@
+param(
+    [switch]$OpenBrowser,
+    [string]$Route = '/'
+)
+
 $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path -Parent $PSScriptRoot
@@ -5,6 +10,7 @@ $python = 'C:\Users\mscma\AppData\Local\Programs\Python\Python310\python.exe'
 $outputDir = Join-Path $repo 'output'
 $stdoutLog = Join-Path $outputDir 'flask_stdout.log'
 $stderrLog = Join-Path $outputDir 'flask_stderr.log'
+$openBrowserScript = Join-Path $PSScriptRoot 'open_local_browser.ps1'
 
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 
@@ -38,6 +44,22 @@ $process = Start-Process `
     -RedirectStandardError $stderrLog `
     -PassThru
 
+$baseUrl = 'http://127.0.0.1:5000'
+$targetUrl = '{0}{1}' -f $baseUrl, ($(if ($Route.StartsWith('/')) { $Route } else { "/$Route" }))
+
+for ($attempt = 0; $attempt -lt 30; $attempt++) {
+    try {
+        Invoke-WebRequest -Uri $baseUrl -UseBasicParsing -TimeoutSec 2 | Out-Null
+        break
+    } catch {
+        Start-Sleep -Seconds 1
+    }
+}
+
 Write-Host "Started Flask server with PID $($process.Id)"
-Write-Host "Open http://127.0.0.1:5000"
+Write-Host "Open $targetUrl"
 Write-Host "Readable request/error log: $stderrLog"
+
+if ($OpenBrowser) {
+    & $openBrowserScript -Url $targetUrl
+}

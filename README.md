@@ -82,7 +82,19 @@ python app.py
 PowerShell helpers:
 
 - `scripts/start_local_server.ps1`
+- `scripts/start_local_server.ps1 -OpenBrowser`
+- `scripts/open_local_browser.ps1`
 - `scripts/tail_local_logs.ps1`
+- `scripts/verify_local_ui.ps1`
+
+If the embedded browser blocks `localhost` or `127.0.0.1`, use the desktop-browser fallback helpers instead:
+
+```powershell
+.\scripts\start_local_server.ps1 -OpenBrowser
+.\scripts\verify_local_ui.ps1
+```
+
+`verify_local_ui.ps1` captures real browser screenshots and DOM dumps into `output\ui_verification\...` using a clean Chrome/Edge profile with extensions disabled, which avoids `ERR_BLOCKED_BY_CLIENT` cases caused by browser-side blockers.
 
 ## Tests
 

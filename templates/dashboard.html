@@ -63,6 +63,23 @@
         </div>
     </div>
 
+    <div class="dashboard-library">
+        <div class="library-header">
+            <div>
+                <h3>Report Structure</h3>
+                <p>Split the board into pages and save bookmark states for guided review flows.</p>
+            </div>
+            <div class="header-buttons">
+                <button id="addDashboardPage" class="btn btn-outline">Add Page</button>
+                <button id="saveDashboardBookmark" class="btn btn-outline">Save Bookmark</button>
+            </div>
+        </div>
+        <div id="dashboardPageTabs" class="dashboard-page-tabs"></div>
+        <div id="dashboardBookmarks" class="dashboard-library-list">
+            <p class="library-empty">No bookmarks yet. Save a page and filter state once the board tells the right story.</p>
+        </div>
+    </div>
+
     <div class="dashboard-filters">
         <div class="library-header">
             <div>
@@ -230,6 +247,31 @@
     display: flex;
     gap: 12px;
     flex-wrap: wrap;
+}
+
+.dashboard-page-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.dashboard-page-tab {
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 10px 14px;
+    background: color-mix(in srgb, var(--bg-soft) 92%, transparent);
+    color: var(--text-light);
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.dashboard-page-tab.active {
+    background: linear-gradient(135deg, color-mix(in srgb, var(--primary-color) 14%, transparent), color-mix(in srgb, var(--accent-color) 12%, transparent));
+    color: var(--text-color);
+    border-color: color-mix(in srgb, var(--primary-color) 35%, var(--border-color));
+    transform: translateY(-1px);
 }
 
 .dashboard-library-item {
@@ -535,10 +577,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const dashboardArea = document.getElementById('dashboardArea');
     const dashboardScope = document.querySelector('.dashboard-container')?.dataset.dashboardScope || 'default';
     const dashboardVizStorageKey = `dashboardViz:${dashboardScope}`;
+    const dashboardStateStorageKey = `dashboardState:${dashboardScope}`;
     const dashboardFilterStorageKey = `dashboardFilterState:${dashboardScope}`;
     const dashboardEmptyState = document.getElementById('dashboardEmptyState');
     const clearDashboardBtn = document.getElementById('clearDashboard');
     const dashboardLibraryList = document.getElementById('dashboardLibraryList');
+    const dashboardPageTabs = document.getElementById('dashboardPageTabs');
+    const dashboardBookmarks = document.getElementById('dashboardBookmarks');
     const dashboardNameInput = document.getElementById('dashboardName');
     const globalFilterColumn = document.getElementById('globalFilterColumn');
     const globalFilterValue = document.getElementById('globalFilterValue');
@@ -546,7 +591,53 @@ document.addEventListener('DOMContentLoaded', function() {
     const dateFilterStart = document.getElementById('dateFilterStart');
     const dateFilterEnd = document.getElementById('dateFilterEnd');
     const dashboardFilterStatus = document.getElementById('dashboardFilterStatus');
+    const defaultDashboardState = {
+        pages: [{ id: 'page_overview', name: 'Overview' }],
+        current_page_id: 'page_overview',
+        bookmarks: [],
+    };
+    let dashboardWorkspaceState = hydrateDashboardWorkspaceState(JSON.parse(localStorage.getItem(dashboardStateStorageKey) || 'null'));
     let dashboardFilterState = JSON.parse(localStorage.getItem(dashboardFilterStorageKey) || '{}');
+
+    function hydrateDashboardWorkspaceState(candidate) {
+        const pages = Array.isArray(candidate?.pages) && candidate.pages.length
+            ? candidate.pages.map((page, index) => ({
+                id: page?.id || `page_${index + 1}`,
+                name: page?.name || `Page ${index + 1}`,
+            }))
+            : defaultDashboardState.pages.map((page) => ({ ...page }));
+        const currentPageId = pages.some((page) => page.id === candidate?.current_page_id)
+            ? candidate.current_page_id
+            : pages[0].id;
+        const bookmarks = Array.isArray(candidate?.bookmarks)
+            ? candidate.bookmarks.map((bookmark, index) => ({
+                id: bookmark?.id || `bookmark_${index + 1}`,
+                name: bookmark?.name || `Bookmark ${index + 1}`,
+                page_id: bookmark?.page_id || currentPageId,
+                filters: bookmark?.filters || {},
+            }))
+            : [];
+        return {
+            pages,
+            current_page_id: currentPageId,
+            bookmarks,
+        };
+    }
+
+    function persistDashboardWorkspaceState() {
+        localStorage.setItem(dashboardStateStorageKey, JSON.stringify(dashboardWorkspaceState));
+    }
+
+    function currentDashboardPageId() {
+        return dashboardWorkspaceState.current_page_id || dashboardWorkspaceState.pages[0]?.id || 'page_overview';
+    }
+
+    function serializeDashboardState() {
+        return {
+            ...dashboardWorkspaceState,
+            filters: dashboardFilterState,
+        };
+    }
 
     function themeToken(name, fallback = '') {
         return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
@@ -622,6 +713,7 @@ document.addEventListener('DOMContentLoaded', function() {
             id: Number.isFinite(Number(viz?.id)) ? Number(viz.id) : Date.now() + index,
             title: viz?.title || (viz?.type ? `${viz.type} Chart` : 'Saved chart'),
             type: viz?.type || 'bar',
+            pageId: viz?.pageId || viz?.page_id || currentDashboardPageId(),
             columns: Array.isArray(viz?.columns) ? viz.columns : [],
             samplePercentage: viz?.samplePercentage ?? 100,
             content: viz?.content || '',
@@ -652,6 +744,91 @@ document.addEventListener('DOMContentLoaded', function() {
         localStorage.setItem(dashboardVizStorageKey, JSON.stringify(dashboardViz));
     }
 
+    function renderDashboardPages() {
+        if (!dashboardPageTabs) {
+            return;
+        }
+        dashboardPageTabs.innerHTML = dashboardWorkspaceState.pages.map((page) => `
+            <button type="button" class="dashboard-page-tab ${page.id === currentDashboardPageId() ? 'active' : ''}" data-page-id="${page.id}">
+                ${page.name}
+            </button>
+        `).join('');
+        dashboardPageTabs.querySelectorAll('.dashboard-page-tab').forEach((button) => {
+            button.addEventListener('click', () => {
+                dashboardWorkspaceState.current_page_id = button.dataset.pageId;
+                persistDashboardWorkspaceState();
+                clearDashboardCanvas();
+                loadDashboard();
+            });
+        });
+    }
+
+    function renderDashboardBookmarks() {
+        if (!dashboardBookmarks) {
+            return;
+        }
+        if (!dashboardWorkspaceState.bookmarks.length) {
+            dashboardBookmarks.innerHTML = '<p class="library-empty">No bookmarks yet. Save a page and filter state once the board tells the right story.</p>';
+            return;
+        }
+        dashboardBookmarks.innerHTML = dashboardWorkspaceState.bookmarks.map((bookmark) => `
+            <div class="dashboard-library-item">
+                <h4>${bookmark.name}</h4>
+                <p>Page: ${bookmark.page_id}</p>
+                <p>${bookmark.filters?.column ? `${bookmark.filters.column} = ${bookmark.filters.value || 'All'}` : 'No segment filter captured'}</p>
+                <button class="btn btn-outline load-dashboard-bookmark" data-bookmark-id="${bookmark.id}">Open</button>
+            </div>
+        `).join('');
+
+        document.querySelectorAll('.load-dashboard-bookmark').forEach((button) => {
+            button.addEventListener('click', () => {
+                const bookmark = dashboardWorkspaceState.bookmarks.find((item) => item.id === button.dataset.bookmarkId);
+                if (!bookmark) {
+                    return;
+                }
+                dashboardWorkspaceState.current_page_id = bookmark.page_id || currentDashboardPageId();
+                dashboardFilterState = bookmark.filters || {};
+                persistDashboardWorkspaceState();
+                saveFilterState();
+                loadFilterOptions().then(() => {
+                    clearDashboardCanvas();
+                    loadDashboard();
+                    showSuccess(`Bookmark "${bookmark.name}" loaded.`);
+                });
+            });
+        });
+    }
+
+    function addDashboardPage() {
+        const name = prompt('Name this dashboard page', `Page ${dashboardWorkspaceState.pages.length + 1}`);
+        if (!name) {
+            return;
+        }
+        const pageId = `page_${Date.now()}`;
+        dashboardWorkspaceState.pages.push({ id: pageId, name: name.trim() || `Page ${dashboardWorkspaceState.pages.length + 1}` });
+        dashboardWorkspaceState.current_page_id = pageId;
+        persistDashboardWorkspaceState();
+        clearDashboardCanvas();
+        loadDashboard();
+    }
+
+    function saveDashboardBookmark() {
+        const name = prompt('Save bookmark as', `${dashboardWorkspaceState.pages.find((page) => page.id === currentDashboardPageId())?.name || 'Dashboard'} view`);
+        if (!name) {
+            return;
+        }
+        dashboardWorkspaceState.bookmarks.unshift({
+            id: `bookmark_${Date.now()}`,
+            name: name.trim() || 'Saved view',
+            page_id: currentDashboardPageId(),
+            filters: { ...dashboardFilterState },
+        });
+        dashboardWorkspaceState.bookmarks = dashboardWorkspaceState.bookmarks.slice(0, 8);
+        persistDashboardWorkspaceState();
+        renderDashboardBookmarks();
+        showSuccess('Bookmark saved for this dashboard state.');
+    }
+
     function renderDashboardEmptyState() {
         const hasCards = dashboardArea.querySelector('.viz-block, .text-box');
         dashboardEmptyState.style.display = hasCards ? 'none' : 'flex';
@@ -666,12 +843,17 @@ document.addEventListener('DOMContentLoaded', function() {
     function loadDashboard() {
         const dashboardViz = getStoredDashboardViz();
         persistDashboardViz(dashboardViz);
-        dashboardViz.forEach(viz => createVizBlock(viz));
+        renderDashboardPages();
+        renderDashboardBookmarks();
+        dashboardViz
+            .filter((viz) => (viz.pageId || currentDashboardPageId()) === currentDashboardPageId())
+            .forEach(viz => createVizBlock(viz));
         renderDashboardEmptyState();
     }
 
     function saveFilterState() {
         localStorage.setItem(dashboardFilterStorageKey, JSON.stringify(dashboardFilterState));
+        persistDashboardWorkspaceState();
         const parts = [];
         if (dashboardFilterState.column && dashboardFilterState.value && dashboardFilterState.value !== '__all__') {
             parts.push(`${dashboardFilterState.column} = ${dashboardFilterState.value}`);
@@ -767,6 +949,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="dashboard-library-item">
                     <h4>${dashboard.name}</h4>
                     <p>${dashboard.chart_count} charts / updated ${new Date(dashboard.updated_at).toLocaleString()}</p>
+                    <p>${dashboard.page_count || 1} page(s) / ${dashboard.bookmark_count || 0} bookmark(s)</p>
                     <p>Owner: ${dashboard.owner || 'workspace'} / Access: ${dashboard.access_role || 'viewer'} / Shared with ${dashboard.shared_count || 0} teammates</p>
                     <p>Lifecycle: ${dashboard.lifecycle?.certification || 'draft'} / ${dashboard.lifecycle?.stage || 'dev'}</p>
                     <button class="btn btn-outline load-saved-dashboard" data-id="${dashboard.id}">Load</button>
@@ -790,7 +973,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             localStorage.setItem(dashboardVizStorageKey, JSON.stringify(data.dashboard.dashboard_viz || []));
-            dashboardFilterState = data.dashboard.dashboard_state || {};
+            dashboardWorkspaceState = hydrateDashboardWorkspaceState(data.dashboard.dashboard_state || {});
+            dashboardFilterState = (data.dashboard.dashboard_state || {}).filters || {};
+            persistDashboardWorkspaceState();
             saveFilterState();
             await loadFilterOptions();
             clearDashboardCanvas();
@@ -1158,7 +1343,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (confirm('Are you sure you want to clear the dashboard?')) {
             localStorage.removeItem(dashboardVizStorageKey);
             localStorage.removeItem(dashboardFilterStorageKey);
+            dashboardWorkspaceState = hydrateDashboardWorkspaceState(null);
+            persistDashboardWorkspaceState();
+            dashboardFilterState = {};
             clearDashboardCanvas();
+            renderDashboardPages();
+            renderDashboardBookmarks();
             showInfo('Dashboard canvas cleared.');
         }
     });
@@ -1306,7 +1496,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
                     name: dashboardName,
                     dashboard_viz: dashboardViz,
-                    dashboard_state: dashboardFilterState
+                    dashboard_state: serializeDashboardState()
                 })
             });
             const data = await response.json();
@@ -1334,6 +1524,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await response.json();
             if (!data.success) {
                 throw new Error(data.error || 'Could not generate a starter dashboard.');
+            }
+            if (data.dashboard_state) {
+                dashboardWorkspaceState = hydrateDashboardWorkspaceState(data.dashboard_state);
+                persistDashboardWorkspaceState();
             }
             persistDashboardViz((data.dashboard_viz || []).map(normalizeViz));
             clearDashboardCanvas();
@@ -1557,6 +1751,9 @@ document.addEventListener('DOMContentLoaded', function() {
             modal.remove();
         });
     });
+
+    document.getElementById('addDashboardPage').addEventListener('click', addDashboardPage);
+    document.getElementById('saveDashboardBookmark').addEventListener('click', saveDashboardBookmark);
 });
 </script>
 {% endblock %} 

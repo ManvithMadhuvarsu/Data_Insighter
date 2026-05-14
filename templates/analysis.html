@@ -297,6 +297,65 @@
                         <h2>What each field means</h2>
                     </div>
                 </div>
+                <div class="transform-form">
+                    <div class="builder-grid">
+                        <div class="control-group">
+                            <label for="semanticColumn">Column</label>
+                            <select id="semanticColumn">
+                                <option value="">Choose a field</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label for="semanticRole">Semantic role</label>
+                            <select id="semanticRole">
+                                <option value="measure">measure</option>
+                                <option value="dimension">dimension</option>
+                                <option value="datetime">datetime</option>
+                                <option value="identifier">identifier</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label for="semanticAggregation">Default aggregation</label>
+                            <select id="semanticAggregation">
+                                <option value="sum">sum</option>
+                                <option value="average">average</option>
+                                <option value="count">count</option>
+                                <option value="count_distinct">count_distinct</option>
+                                <option value="none">none</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label for="semanticFormat">Format</label>
+                            <select id="semanticFormat">
+                                <option value="number">number</option>
+                                <option value="currency">currency</option>
+                                <option value="percentage">percentage</option>
+                                <option value="integer">integer</option>
+                                <option value="date">date</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="builder-grid">
+                        <div class="control-group">
+                            <label for="semanticBusinessName">Business label</label>
+                            <input id="semanticBusinessName" type="text" placeholder="Gross revenue, active customers...">
+                        </div>
+                        <div class="control-group">
+                            <label for="semanticDescription">Analyst note</label>
+                            <input id="semanticDescription" type="text" placeholder="How this field should be interpreted in the workspace">
+                        </div>
+                    </div>
+                    <div class="calc-grid" style="align-items:center;">
+                        <label style="display:flex; align-items:center; gap:8px; margin:0;">
+                            <input id="semanticCertified" type="checkbox">
+                            Treat as certified metric definition
+                        </label>
+                        <div class="recommendation-actions">
+                            <button id="saveSemanticOverride" class="btn btn-outline" {% if dataset_access_role == 'viewer' %}disabled{% endif %}>Save Override</button>
+                            <button id="clearSemanticOverride" class="btn btn-outline" {% if dataset_access_role == 'viewer' %}disabled{% endif %}>Clear Override</button>
+                        </div>
+                    </div>
+                </div>
                 <div id="semanticModelSummary" class="profile-list loading-text">Mapping dataset grain, primary date axis, and recommended metrics...</div>
                 <div id="semanticProfiles" class="profile-list loading-text">Inferring measures, dimensions, identifiers, and time fields...</div>
             </div>
@@ -346,6 +405,7 @@
                     </div>
                 </div>
                 <div id="executiveTakeaways" class="stack-list loading-text">Writing a concise summary from the dataset...</div>
+                <div id="reportSectionNav" class="profile-meta" style="margin-top:16px;"></div>
                 <div id="reportPreview" class="report-preview loading-text">Report sections will appear here after generation.</div>
             </div>
 
@@ -1064,6 +1124,8 @@ let currentChartMeta = null;
 let currentReport = null;
 let currentDatasetId = '{{ dataset_record.id if dataset_record else "" }}';
 let currentPipelineState = null;
+let currentSemanticProfiles = [];
+let currentSemanticOverrides = {};
 
 function themeToken(name, fallback = '') {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
@@ -1241,6 +1303,8 @@ function renderSemanticModelSummary(model) {
     const grain = model?.row_grain || 'unspecified';
     const recommendedMeasures = (model?.recommended_measures || []).join(', ') || 'No primary measures detected yet';
     const recommendedDimensions = (model?.recommended_dimensions || []).join(', ') || 'No primary dimensions detected yet';
+    const certifiedMetrics = (model?.certified_metrics || []).join(', ') || 'No certified metrics yet';
+    const manualOverrideCount = model?.manual_override_count || 0;
 
     container.innerHTML = `
         <div class="profile-card">
@@ -1254,6 +1318,11 @@ function renderSemanticModelSummary(model) {
             <div class="card-detail" style="margin-top:8px;">Top metrics: ${escapeHtml(recommendedMeasures)}</div>
             <div class="card-detail" style="margin-top:8px;">Top slicers: ${escapeHtml(recommendedDimensions)}</div>
         </div>
+        <div class="profile-card">
+            <div class="card-title">Governed definitions</div>
+            <div class="card-detail">${formatNumber(manualOverrideCount)} manual override(s) / Certified metrics: ${escapeHtml(certifiedMetrics)}</div>
+            <div class="card-detail" style="margin-top:8px;">Use overrides to make downstream visuals and insights follow business-approved definitions instead of raw inference.</div>
+        </div>
         ${(warnings.length
             ? warnings.map((warning) => `
                 <div class="profile-card">
@@ -1266,18 +1335,141 @@ function renderSemanticModelSummary(model) {
 }
 
 function renderSemanticProfiles(profiles) {
-    document.getElementById('semanticProfiles').innerHTML = profiles.slice(0, 10).map((profile) => `
+    currentSemanticProfiles = profiles || [];
+    document.getElementById('semanticProfiles').innerHTML = currentSemanticProfiles.slice(0, 10).map((profile) => `
         <div class="profile-card">
-            <div class="card-title">${escapeHtml(profile.name)}</div>
+            <div class="card-title">${escapeHtml(profile.business_name || profile.name)}</div>
             <div class="profile-meta">
                 <div class="semantic-pill">${escapeHtml(profile.semantic_role)} / ${escapeHtml(profile.subtype)}</div>
                 <div class="semantic-pill">${escapeHtml(profile.default_aggregation || 'n/a')}</div>
                 ${profile.time_grain ? `<div class="semantic-pill">${escapeHtml(profile.time_grain)}</div>` : ''}
+                ${profile.certified ? '<div class="semantic-pill">certified</div>' : ''}
+                ${profile.override_source === 'manual' ? '<div class="semantic-pill">manual override</div>' : ''}
             </div>
             <div class="card-detail" style="margin-top:10px;">Format: ${escapeHtml(profile.format_hint || 'number')} / Additive: ${profile.is_additive ? 'yes' : 'no'} / Cardinality: ${escapeHtml(profile.cardinality_band || 'n/a')}</div>
+            ${profile.description ? `<div class="card-detail" style="margin-top:10px;">${escapeHtml(profile.description)}</div>` : ''}
             <div class="card-detail" style="margin-top:10px;">${escapeHtml((profile.rationale || []).join(' '))}</div>
         </div>
     `).join('');
+    syncSemanticOverrideEditor();
+}
+
+function semanticProfileByColumn(column) {
+    return currentSemanticProfiles.find((profile) => profile.name === column);
+}
+
+function syncSemanticOverrideEditor() {
+    const select = document.getElementById('semanticColumn');
+    if (!select) {
+        return;
+    }
+
+    const currentValue = select.value;
+    select.innerHTML = '<option value="">Choose a field</option>' + currentSemanticProfiles.map((profile) => `
+        <option value="${escapeHtml(profile.name)}">${escapeHtml(profile.business_name || profile.name)}</option>
+    `).join('');
+
+    if (currentValue && currentSemanticProfiles.some((profile) => profile.name === currentValue)) {
+        select.value = currentValue;
+    } else if (!select.value && currentSemanticProfiles.length) {
+        select.value = currentSemanticProfiles[0].name;
+    }
+
+    prefillSemanticOverrideEditor(select.value);
+}
+
+function prefillSemanticOverrideEditor(column) {
+    const profile = semanticProfileByColumn(column);
+    if (!profile) {
+        document.getElementById('semanticBusinessName').value = '';
+        document.getElementById('semanticDescription').value = '';
+        document.getElementById('semanticCertified').checked = false;
+        return;
+    }
+
+    document.getElementById('semanticRole').value = profile.semantic_role || 'dimension';
+    document.getElementById('semanticAggregation').value = profile.default_aggregation || 'sum';
+    document.getElementById('semanticFormat').value = profile.format_hint || 'number';
+    document.getElementById('semanticBusinessName').value = profile.business_name || profile.name;
+    document.getElementById('semanticDescription').value = profile.description || '';
+    document.getElementById('semanticCertified').checked = Boolean(profile.certified);
+}
+
+async function saveSemanticOverride() {
+    if (!currentDatasetId) {
+        throw new Error('No active dataset available for semantic overrides.');
+    }
+    const column = document.getElementById('semanticColumn').value;
+    if (!column) {
+        throw new Error('Choose a column to override.');
+    }
+
+    const overrides = {
+        ...currentSemanticOverrides,
+        [column]: {
+            semantic_role: document.getElementById('semanticRole').value,
+            default_aggregation: document.getElementById('semanticAggregation').value,
+            format_hint: document.getElementById('semanticFormat').value,
+            business_name: document.getElementById('semanticBusinessName').value.trim() || column,
+            description: document.getElementById('semanticDescription').value.trim(),
+            certified: document.getElementById('semanticCertified').checked,
+        },
+    };
+
+    const response = await fetch(`/datasets/${encodeURIComponent(currentDatasetId)}/semantic_overrides`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
+            overrides,
+        })
+    });
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to save semantic overrides');
+    }
+
+    currentSemanticOverrides = data.overrides || {};
+    renderSemanticModelSummary(data.summary.semantic_model || {});
+    renderSemanticProfiles(data.summary.semantic_profiles || []);
+    renderRecommendations(data.summary.recommended_visualizations || []);
+    renderKeyInsights(data.summary.key_insights || []);
+    renderExecutiveTakeaways(data.summary.executive_takeaways || []);
+    renderProfiles(data.summary.column_profiles || []);
+}
+
+async function clearSemanticOverride() {
+    if (!currentDatasetId) {
+        throw new Error('No active dataset available for semantic overrides.');
+    }
+    const column = document.getElementById('semanticColumn').value;
+    if (!column) {
+        throw new Error('Choose a column before clearing its override.');
+    }
+
+    const overrides = { ...currentSemanticOverrides };
+    delete overrides[column];
+
+    const response = await fetch(`/datasets/${encodeURIComponent(currentDatasetId)}/semantic_overrides`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            _csrf_token: window.getCsrfToken ? window.getCsrfToken() : '',
+            overrides,
+        })
+    });
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to clear semantic overrides');
+    }
+
+    currentSemanticOverrides = data.overrides || {};
+    renderSemanticModelSummary(data.summary.semantic_model || {});
+    renderSemanticProfiles(data.summary.semantic_profiles || []);
+    renderRecommendations(data.summary.recommended_visualizations || []);
+    renderKeyInsights(data.summary.key_insights || []);
+    renderExecutiveTakeaways(data.summary.executive_takeaways || []);
+    renderProfiles(data.summary.column_profiles || []);
 }
 
 function renderExecutiveTakeaways(items) {
@@ -1520,14 +1712,22 @@ async function refreshActiveDatasetVersion() {
 
 function renderReportPreview(report) {
     currentReport = report;
-    document.getElementById('reportPreview').innerHTML = report.sections.map((section) => `
+    document.getElementById('reportSectionNav').innerHTML = (report.sections || []).map((section, index) => `
+        <button type="button" class="semantic-pill report-section-jump" data-target="report-section-${index}">${escapeHtml(section.title)}</button>
+    `).join('');
+    document.getElementById('reportPreview').innerHTML = report.sections.map((section, index) => `
         <div class="report-section">
-            <h3>${escapeHtml(section.title)}</h3>
+            <h3 id="report-section-${index}">${escapeHtml(section.title)}</h3>
             <ul>
                 ${section.bullets.map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join('')}
             </ul>
         </div>
     `).join('');
+    document.querySelectorAll('.report-section-jump').forEach((button) => {
+        button.addEventListener('click', () => {
+            document.getElementById(button.dataset.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
 }
 
 function renderReportLibrary(reports) {
@@ -1650,6 +1850,7 @@ async function loadAnalysisSummary() {
     renderSemanticProfiles(data.summary.semantic_profiles || []);
     renderExecutiveTakeaways(data.summary.executive_takeaways || []);
     currentDatasetId = data.dataset?.id || currentDatasetId;
+    currentSemanticOverrides = data.dataset?.metadata?.semantic_overrides || {};
     renderAccessSummary(data.dataset || {}, data.access_role || '{{ dataset_access_role or "owner" }}');
     try {
         await loadPipelineState(currentDatasetId, data.dataset || {});
@@ -1894,26 +2095,41 @@ async function loadGovernanceSummary() {
     renderGovernanceSummary(data.governance);
 }
 
-function renderRefreshJobs(jobs) {
+function renderRefreshJobs(jobs, workerSummary = {}) {
     const container = document.getElementById('refreshJobsList');
     if (!jobs.length) {
         container.innerHTML = '<div class="recommendation-card"><div class="card-detail">No refresh schedules yet. Create a cadence to keep this dataset materialized and current.</div></div>';
         return;
     }
 
-    container.innerHTML = jobs.map((job) => `
+    const workerCard = `
+        <div class="recommendation-card">
+            <div>
+                <div class="card-title">Refresh worker runtime</div>
+                <div class="card-detail">Embedded scheduler: ${workerSummary.embedded_scheduler ? 'active' : 'idle'} / Active claims: ${workerSummary.active_claims || 0}</div>
+                <div class="card-detail">Last completed run: ${escapeHtml(workerSummary.last_completed_at || 'No completed worker run yet')}</div>
+                <div class="card-detail">Workers observed: ${escapeHtml((workerSummary.worker_ids || []).join(', ') || 'none recorded')}</div>
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = workerCard + jobs.map((job) => {
+        const runtime = job.metadata?.worker_runtime || {};
+        return `
         <div class="recommendation-card">
             <div>
                 <div class="card-title">${escapeHtml(job.mode || 'full')} refresh every ${job.cadence_minutes} minutes</div>
                 <div class="card-detail">Owner: ${escapeHtml(job.owner || 'workspace')} / Status: ${escapeHtml(job.last_status || 'scheduled')} / Next run: ${escapeHtml(job.next_run_at || 'pending')}</div>
                 <div class="card-detail">Cursor: ${escapeHtml(job.incremental_column || 'n/a')} / Enabled: ${job.enabled ? 'Yes' : 'No'}</div>
+                <div class="card-detail">Worker: ${escapeHtml(runtime.last_worker_id || runtime.claimed_by || 'not assigned')} / Lease until: ${escapeHtml(runtime.lease_expires_at || 'not running')}</div>
             </div>
             <div class="recommendation-actions">
                 <button class="btn btn-outline run-refresh-job" data-job-id="${escapeHtml(job.id)}">Run Now</button>
                 <button class="btn btn-outline toggle-refresh-job" data-job-id="${escapeHtml(job.id)}" data-enabled="${job.enabled ? '1' : '0'}">${job.enabled ? 'Pause' : 'Resume'}</button>
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 
     document.querySelectorAll('.run-refresh-job').forEach((button) => {
         button.addEventListener('click', async () => {
@@ -1934,7 +2150,7 @@ async function loadRefreshJobs() {
     if (!data.success) {
         throw new Error(data.error || 'Failed to load refresh schedules');
     }
-    renderRefreshJobs(data.jobs || []);
+    renderRefreshJobs(data.jobs || [], data.worker_summary || {});
 }
 
 async function createDatasetRefreshSchedule() {
@@ -2491,6 +2707,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             await saveCurrentRowPolicy();
             showSuccess('Row-level policy saved.');
+        } catch (error) {
+            showError(error.message);
+        }
+    });
+    document.getElementById('semanticColumn')?.addEventListener('change', (event) => {
+        prefillSemanticOverrideEditor(event.target.value);
+    });
+    document.getElementById('saveSemanticOverride')?.addEventListener('click', async () => {
+        try {
+            await saveSemanticOverride();
+            showSuccess('Semantic override saved.');
+        } catch (error) {
+            showError(error.message);
+        }
+    });
+    document.getElementById('clearSemanticOverride')?.addEventListener('click', async () => {
+        try {
+            await clearSemanticOverride();
+            showSuccess('Semantic override cleared.');
         } catch (error) {
             showError(error.message);
         }

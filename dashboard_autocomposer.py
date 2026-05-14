@@ -3,11 +3,23 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 
-def _text_block(block_id: int, title: str, content: str, x: int, y: int, width: int, height: int, *, emphasis: bool = False) -> Dict[str, Any]:
+def _text_block(
+    block_id: int,
+    title: str,
+    content: str,
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+    *,
+    emphasis: bool = False,
+    page_id: str = 'page_overview',
+) -> Dict[str, Any]:
     return {
         'id': block_id,
         'title': title,
         'type': 'text',
+        'page_id': page_id,
         'columns': [],
         'content': content,
         'position': {'x': x, 'y': y},
@@ -22,11 +34,22 @@ def _text_block(block_id: int, title: str, content: str, x: int, y: int, width: 
     }
 
 
-def _chart_block(block_id: int, title: str, chart: Dict[str, Any], x: int, y: int, width: int, height: int) -> Dict[str, Any]:
+def _chart_block(
+    block_id: int,
+    title: str,
+    chart: Dict[str, Any],
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+    *,
+    page_id: str = 'page_overview',
+) -> Dict[str, Any]:
     return {
         'id': block_id,
         'title': title,
         'type': chart.get('type', 'bar'),
+        'page_id': page_id,
         'columns': chart.get('columns', []),
         'samplePercentage': chart.get('sample_percentage', 100),
         'position': {'x': x, 'y': y},
@@ -96,7 +119,7 @@ def compose_starter_dashboard(summary: Dict[str, Any], dataset_name: str | None 
     ]
     if primary_date:
         header_lines.append(f'Primary time axis: {primary_date}')
-    cards.append(_text_block(next_id, 'Dashboard brief', '\n'.join(header_lines), 24, 24, 1210, 120, emphasis=True))
+    cards.append(_text_block(next_id, 'Dashboard brief', '\n'.join(header_lines), 24, 24, 1210, 120, emphasis=True, page_id='page_overview'))
     next_id += 1
 
     primary_measure = recommended_measures[0] if recommended_measures else None
@@ -108,7 +131,7 @@ def compose_starter_dashboard(summary: Dict[str, Any], dataset_name: str | None 
             'type': 'kpi',
             'columns': [primary_measure],
             'sample_percentage': 100,
-        }, 24, 164, 250, 220))
+        }, 24, 164, 250, 220, page_id='page_overview'))
         next_id += 1
 
     if secondary_measure:
@@ -116,7 +139,7 @@ def compose_starter_dashboard(summary: Dict[str, Any], dataset_name: str | None 
             'type': 'kpi',
             'columns': [secondary_measure],
             'sample_percentage': 100,
-        }, 294, 164, 250, 220))
+        }, 294, 164, 250, 220, page_id='page_overview'))
         next_id += 1
 
     if primary_measure and primary_date:
@@ -124,16 +147,16 @@ def compose_starter_dashboard(summary: Dict[str, Any], dataset_name: str | None 
             'type': 'line',
             'columns': [primary_date, primary_measure],
             'sample_percentage': 100,
-        }, 564, 164, 670, 300))
+        }, 564, 164, 670, 300, page_id='page_overview'))
         next_id += 1
     else:
         fallback_chart = pick_chart(chart_type='kpi') or pick_chart(chart_type='line') or pick_chart()
         if fallback_chart:
-            cards.append(_chart_block(next_id, fallback_chart.get('title', 'Headline chart'), fallback_chart, 564, 164, 670, 300))
+            cards.append(_chart_block(next_id, fallback_chart.get('title', 'Headline chart'), fallback_chart, 564, 164, 670, 300, page_id='page_overview'))
             next_id += 1
 
     section_note = 'Use this row to compare which segments outperform, concentrate value, or explain recent movement.'
-    cards.append(_text_block(next_id, 'Driver row', section_note, 24, 404, 520, 78))
+    cards.append(_text_block(next_id, 'Driver row', section_note, 24, 404, 520, 78, page_id='page_overview'))
     next_id += 1
 
     comparison_chart = pick_chart(insight_kind='segment_driver', chart_type='bar')
@@ -144,12 +167,12 @@ def compose_starter_dashboard(summary: Dict[str, Any], dataset_name: str | None 
             'sample_percentage': 100,
         }
     if comparison_chart:
-        cards.append(_chart_block(next_id, comparison_chart.get('title', 'Segment comparison'), comparison_chart, 24, 496, 520, 300))
+        cards.append(_chart_block(next_id, comparison_chart.get('title', 'Segment comparison'), comparison_chart, 24, 496, 520, 300, page_id='page_overview'))
         next_id += 1
 
     contribution_chart = pick_chart(insight_kind='contribution', chart_type='bar') or pick_chart(insight_kind='variance_explanation', chart_type='bar')
     if contribution_chart:
-        cards.append(_chart_block(next_id, contribution_chart.get('title', 'Contribution view'), contribution_chart, 564, 496, 670, 300))
+        cards.append(_chart_block(next_id, contribution_chart.get('title', 'Contribution view'), contribution_chart, 564, 496, 670, 300, page_id='page_overview'))
         next_id += 1
 
     watchlist_chart = (
@@ -159,13 +182,21 @@ def compose_starter_dashboard(summary: Dict[str, Any], dataset_name: str | None 
         or pick_chart(chart_type='heatmap')
     )
     if watchlist_chart:
-        cards.append(_chart_block(next_id, watchlist_chart.get('title', 'Watchlist'), watchlist_chart, 24, 824, 520, 300))
+        cards.append(_chart_block(next_id, watchlist_chart.get('title', 'Watchlist'), watchlist_chart, 24, 164, 520, 300, page_id='page_deep_dive'))
         next_id += 1
 
     takeaway_lines = takeaways[:4] or ['No narrative takeaways were generated yet.']
-    cards.append(_text_block(next_id, 'Executive takeaways', '\n'.join(f'- {line}' for line in takeaway_lines), 564, 824, 670, 300))
+    cards.append(_text_block(next_id, 'Executive takeaways', '\n'.join(f'- {line}' for line in takeaway_lines), 564, 164, 670, 300, page_id='page_deep_dive'))
 
     return {
         'layout_name': 'executive_storyboard',
         'dashboard_viz': cards,
+        'dashboard_state': {
+            'pages': [
+                {'id': 'page_overview', 'name': 'Executive Overview'},
+                {'id': 'page_deep_dive', 'name': 'Drivers and Risks'},
+            ],
+            'current_page_id': 'page_overview',
+            'bookmarks': [],
+        },
     }

@@ -35,10 +35,9 @@
         </div>
     </div>
     <div class="hero-image hero-image-immersive">
-        <div class="hero-visual-shell">
-            <div id="hero3dScene" class="hero-visual-stage" aria-hidden="true"></div>
-            <img class="hero-visual-fallback hero-visual-runtime-fallback" src="{{ url_for('static', filename='images/data-analysis.svg') }}" alt="Data Analysis">
-            <div class="hero-visual-overlay" aria-hidden="true">
+            <div class="hero-visual-shell">
+                <div id="hero3dScene" class="hero-visual-stage" aria-hidden="true"></div>
+                <div class="hero-visual-overlay" aria-hidden="true">
                 <div class="hero-visual-pill hero-visual-pill-left">
                     <span class="hero-pill-dot upload"></span>
                     Upload streams
@@ -69,9 +68,6 @@
                     <p>Starter dashboards, saved reports, and reusable KPI views emerge from the same semantic layer.</p>
                 </div>
             </div>
-            <noscript>
-                <img class="hero-visual-fallback" src="{{ url_for('static', filename='images/data-analysis.svg') }}" alt="Data Analysis">
-            </noscript>
         </div>
     </div>
 </section>

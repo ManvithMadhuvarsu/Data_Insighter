@@ -4,6 +4,7 @@
 
 {% block head %}
 {{ super() }}
+<script src="{{ url_for('static', filename='vendor/three.r128.min.js') }}"></script>
 {% endblock %}
 
 {% block content %}
@@ -33,8 +34,45 @@
             </a>
         </div>
     </div>
-    <div class="hero-image">
-        <img src="{{ url_for('static', filename='images/data-analysis.svg') }}" alt="Data Analysis">
+    <div class="hero-image hero-image-immersive">
+        <div class="hero-visual-shell">
+            <div id="hero3dScene" class="hero-visual-stage" aria-hidden="true"></div>
+            <img class="hero-visual-fallback hero-visual-runtime-fallback" src="{{ url_for('static', filename='images/data-analysis.svg') }}" alt="Data Analysis">
+            <div class="hero-visual-overlay" aria-hidden="true">
+                <div class="hero-visual-pill hero-visual-pill-left">
+                    <span class="hero-pill-dot upload"></span>
+                    Upload streams
+                </div>
+                <div class="hero-visual-pill hero-visual-pill-center">
+                    <span class="hero-pill-dot model"></span>
+                    Semantic core
+                </div>
+                <div class="hero-visual-pill hero-visual-pill-right">
+                    <span class="hero-pill-dot dashboard"></span>
+                    Dashboard outputs
+                </div>
+            </div>
+            <div class="hero-visual-caption">
+                <div class="hero-visual-card">
+                    <span class="metric-label">Step 1</span>
+                    <strong>Ingest and profile</strong>
+                    <p>CSV, Excel, JSON, and Parquet inputs get parsed into typed, governed dataset structure.</p>
+                </div>
+                <div class="hero-visual-card">
+                    <span class="metric-label">Step 2</span>
+                    <strong>Infer and explain</strong>
+                    <p>Measures, dimensions, time axes, outliers, drivers, and trends rise into an analyst-ready model.</p>
+                </div>
+                <div class="hero-visual-card">
+                    <span class="metric-label">Step 3</span>
+                    <strong>Operationalize</strong>
+                    <p>Starter dashboards, saved reports, and reusable KPI views emerge from the same semantic layer.</p>
+                </div>
+            </div>
+            <noscript>
+                <img class="hero-visual-fallback" src="{{ url_for('static', filename='images/data-analysis.svg') }}" alt="Data Analysis">
+            </noscript>
+        </div>
     </div>
 </section>
 
@@ -252,6 +290,7 @@
         featuresSection.scrollIntoView({ behavior: 'smooth' });
     });
 </script>
+<script src="{{ url_for('static', filename='js/home_hero.js') }}"></script>
 <style>
 .workspace-overview {
     max-width: 1200px;
@@ -325,6 +364,157 @@
     margin-bottom: 0.4rem;
 }
 
+.hero-image-immersive {
+    min-height: 680px;
+    align-items: stretch;
+    padding: 1.5rem;
+}
+
+.hero-image-immersive::after {
+    inset: 4%;
+    border-radius: 34px;
+    background:
+        radial-gradient(circle at 18% 20%, color-mix(in srgb, var(--primary-color) 20%, transparent), transparent 42%),
+        radial-gradient(circle at 78% 78%, color-mix(in srgb, var(--accent-color) 18%, transparent), transparent 38%),
+        linear-gradient(160deg, color-mix(in srgb, var(--bg-canvas) 88%, transparent), color-mix(in srgb, var(--bg-soft) 92%, transparent));
+}
+
+.hero-visual-shell {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    min-height: 100%;
+    border-radius: 32px;
+    overflow: hidden;
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--bg-page) 92%, transparent), color-mix(in srgb, var(--bg-canvas) 96%, transparent)),
+        radial-gradient(circle at top left, color-mix(in srgb, var(--primary-color) 10%, transparent), transparent 34%);
+    border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--white) 28%, transparent),
+        0 32px 64px rgba(15, 23, 42, 0.12);
+}
+
+.hero-visual-stage {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+}
+
+.hero-visual-stage canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.hero-visual-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.hero-visual-pill {
+    position: absolute;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.7rem 1rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--bg-canvas) 90%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+    color: var(--text-color);
+    font-size: 0.83rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    backdrop-filter: blur(14px);
+    box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08);
+}
+
+.hero-visual-pill-left {
+    top: 1.1rem;
+    left: 1.1rem;
+}
+
+.hero-visual-pill-center {
+    top: 1.3rem;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.hero-visual-pill-right {
+    top: 1.1rem;
+    right: 1.1rem;
+}
+
+.hero-pill-dot {
+    width: 0.68rem;
+    height: 0.68rem;
+    border-radius: 999px;
+    box-shadow: 0 0 18px currentColor;
+}
+
+.hero-pill-dot.upload {
+    color: var(--accent-color);
+    background: currentColor;
+}
+
+.hero-pill-dot.model {
+    color: var(--primary-color);
+    background: currentColor;
+}
+
+.hero-pill-dot.dashboard {
+    color: var(--info-color);
+    background: currentColor;
+}
+
+.hero-visual-caption {
+    position: absolute;
+    left: 1.1rem;
+    right: 1.1rem;
+    bottom: 1.1rem;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem;
+    z-index: 3;
+}
+
+.hero-visual-card {
+    padding: 1rem 1.05rem;
+    border-radius: 22px;
+    background: color-mix(in srgb, var(--bg-canvas) 90%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+    backdrop-filter: blur(16px);
+    box-shadow: 0 18px 32px rgba(15, 23, 42, 0.08);
+}
+
+.hero-visual-card strong {
+    display: block;
+    margin-bottom: 0.45rem;
+    font-size: 1rem;
+}
+
+.hero-visual-card p {
+    color: var(--text-light);
+    font-size: 0.92rem;
+    line-height: 1.55;
+}
+
+.hero-visual-fallback {
+    position: absolute;
+    inset: 12% 10% 28%;
+    z-index: 1;
+    width: auto;
+    height: auto;
+    max-width: 80%;
+    max-height: 52%;
+    margin: auto;
+    display: block;
+    object-fit: contain;
+    filter: drop-shadow(0 24px 38px rgba(15, 23, 42, 0.14));
+}
+
 .story-strip {
     max-width: 1200px;
     margin: 0 auto;
@@ -347,6 +537,27 @@
 }
 
 @media (max-width: 768px) {
+    .hero-image-immersive {
+        min-height: 560px;
+    }
+
+    .hero-visual-pill-center {
+        top: auto;
+        bottom: 11rem;
+        left: 1.1rem;
+        transform: none;
+    }
+
+    .hero-visual-pill-right {
+        top: auto;
+        right: 1.1rem;
+        bottom: 11rem;
+    }
+
+    .hero-visual-caption {
+        grid-template-columns: 1fr;
+    }
+
     .workspace-current {
         flex-direction: column;
         align-items: flex-start;

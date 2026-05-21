@@ -123,7 +123,7 @@ The current suite covers:
 - relationship/key profiling
 - advanced insight helpers
 - report HTML escaping
-- auth edge cases around duplicate emails and email login
+- auth edge cases around duplicate emails and email login effectively.
 
 ## Notes
 

@@ -34,14 +34,13 @@ import time
 import secrets
 import tempfile
 from dataset_pipeline_service import build_dataset_from_record, dataset_pipeline_steps, supports_pipeline_rebuild
-from dataset_refresh_service import dataset_freshness, refresh_dataset_frame, schema_changes, schema_snapshot
+from dataset_refresh_service import dataset_freshness, schema_snapshot
 from file_utils import SUPPORTED_EXTENSIONS, read_data_file
 from governance_service import build_governance_summary
 from dotenv import load_dotenv
 from query_engine_service import execute_dataset_sql
 from refresh_job_service import (
     create_refresh_schedule,
-    list_refresh_schedules,
     perform_dataset_refresh,
     refresh_worker_summary,
     run_refresh_job_by_id,
@@ -65,14 +64,12 @@ from workspace_store import (
     list_all_measure_records,
     list_all_query_records,
     list_all_refresh_job_records,
-    list_refresh_job_records,
     list_query_records,
     update_dataset_record,
     update_dashboard_record,
     update_query_record,
     update_refresh_job_record,
     update_report_record,
-    list_audit_events,
     list_all_audit_events,
     list_all_report_records,
     list_all_dataset_records,
@@ -735,20 +732,20 @@ def flatten_json_data(data):
         return data
 
 class NumpyEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, (np.int_, np.intc, np.intp, np.int8,
+    def default(self, o):
+        if isinstance(o, (np.int_, np.intc, np.intp, np.int8,
                           np.int16, np.int32, np.int64, np.uint8,
                           np.uint16, np.uint32, np.uint64)):
-            return int(obj)
-        elif isinstance(obj, (np.float_, np.float16, np.float32, np.float64)):
-            return float(obj)
-        elif isinstance(obj, (np.ndarray,)):
-            return obj.tolist()
-        elif isinstance(obj, pd.Series):
-            return obj.tolist()
-        elif isinstance(obj, pd.Timestamp):
-            return obj.strftime('%Y-%m-%d %H:%M:%S')
-        return super().default(obj)
+            return int(o)
+        elif isinstance(o, (np.float_, np.float16, np.float32, np.float64)):
+            return float(o)
+        elif isinstance(o, (np.ndarray,)):
+            return o.tolist()
+        elif isinstance(o, pd.Series):
+            return o.tolist()
+        elif isinstance(o, pd.Timestamp):
+            return o.strftime('%Y-%m-%d %H:%M:%S')
+        return super().default(o)
 
 @app.route('/')
 @login_required
@@ -1698,7 +1695,7 @@ def refresh_dataset(dataset_id):
         return access_error
 
     try:
-        updated_record, refreshed_df, diff, refresh_details = perform_dataset_refresh(
+        updated_record, _refreshed_df, diff, refresh_details = perform_dataset_refresh(
             session['user'],
             record,
             app.config['MANAGED_DATASETS_FOLDER'],

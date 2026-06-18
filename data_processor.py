@@ -46,7 +46,7 @@ class DataProcessor:
         try:
             return load_prepared_dataframe(self.filepath)
         except Exception as e:
-            raise ValueError(f"Error loading data: {str(e)}")
+            raise ValueError(f"Error loading data: {str(e)}") from e
 
     def _serialize_value(self, value: Any) -> Any:
         if pd.isna(value):

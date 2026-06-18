@@ -13,28 +13,28 @@ from dataset_runtime import load_prepared_dataframe, prepare_dataframe
 
 # Custom JSON encoder to handle NumPy types
 class NumpyEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, (np.int_, np.intc, np.intp, np.int8,
+    def default(self, o):
+        if isinstance(o, (np.int_, np.intc, np.intp, np.int8,
                           np.int16, np.int32, np.int64, np.uint8,
                           np.uint16, np.uint32, np.uint64)):
-            return int(obj)
-        elif isinstance(obj, (np.float_, np.float16, np.float32, np.float64)):
-            return float(obj)
-        elif isinstance(obj, (np.complex_, np.complex64, np.complex128)):
-            return {'real': obj.real, 'imag': obj.imag}
-        elif isinstance(obj, (np.ndarray,)):
-            return obj.tolist()
-        elif isinstance(obj, (np.bool_)):
-            return bool(obj)
-        elif isinstance(obj, (np.void)):
+            return int(o)
+        elif isinstance(o, (np.float_, np.float16, np.float32, np.float64)):
+            return float(o)
+        elif isinstance(o, (np.complex_, np.complex64, np.complex128)):
+            return {'real': o.real, 'imag': o.imag}
+        elif isinstance(o, (np.ndarray,)):
+            return o.tolist()
+        elif isinstance(o, (np.bool_)):
+            return bool(o)
+        elif isinstance(o, (np.void)):
             return None
-        elif isinstance(obj, pd.Timestamp):
-            return obj.strftime('%Y-%m-%d %H:%M:%S')
-        elif isinstance(obj, pd.Series):
-            return obj.tolist()
-        elif isinstance(obj, pd.DataFrame):
-            return obj.to_dict('records')
-        return super().default(obj)
+        elif isinstance(o, pd.Timestamp):
+            return o.strftime('%Y-%m-%d %H:%M:%S')
+        elif isinstance(o, pd.Series):
+            return o.tolist()
+        elif isinstance(o, pd.DataFrame):
+            return o.to_dict('records')
+        return super().default(o)
 
 class VisualizationGenerator:
     def __init__(self, filepath: str = None, dataframe: pd.DataFrame | None = None):
@@ -51,7 +51,7 @@ class VisualizationGenerator:
                     raise ValueError("Could not read the file or file is empty")
             except Exception as e:
                 self.df = None  # Ensure df is None if there's an error
-                raise ValueError(f"Error loading data: {str(e)}")
+                raise ValueError(f"Error loading data: {str(e)}") from e
         else:
             self.df = None
     
@@ -427,7 +427,7 @@ class VisualizationGenerator:
                     outliers = df[df[columns[0]] > (q3 + 1.5 * iqr) | 
                               df[columns[0]] < (q1 - 1.5 * iqr)]
                     
-                    for idx, row in outliers.iterrows():
+                    for _idx, row in outliers.iterrows():
                         fig.add_annotation(
                             x=0,
                             y=row[columns[0]],
@@ -510,4 +510,4 @@ class VisualizationGenerator:
             import traceback
             print(f"Error generating visualization: {str(e)}")
             print(traceback.format_exc())
-            raise ValueError(f"Error generating visualization: {str(e)}")
+            raise ValueError(f"Error generating visualization: {str(e)}") from e

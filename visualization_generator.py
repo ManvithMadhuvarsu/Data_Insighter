@@ -234,7 +234,17 @@ class VisualizationGenerator:
             missing_cols = [col for col in columns if col not in self.df.columns]
             if missing_cols:
                 raise ValueError(f"Columns not found: {', '.join(missing_cols)}")
-            
+
+            # 'auto' resolves to the best chart type for the selected columns,
+            # mirroring the Power BI / Fabric "Suggest a chart" experience.
+            auto_reason = None
+            if viz_type == 'auto':
+                from chart_recommender import recommend_chart
+                recommendation = recommend_chart(self.df, columns)
+                viz_type = recommendation['type']
+                columns = recommendation['columns']
+                auto_reason = recommendation['reason']
+
             df = self._sample_data(sample_percentage)
             df = self._apply_filters(df, filters)
             df = self._prepare_subset(df, columns)
@@ -507,9 +517,14 @@ class VisualizationGenerator:
             }
             
             fig.update_layout(**layout_settings)
-            
+
             # Convert to dict and handle JSON serialization
             fig_dict = fig.to_dict()
+            if auto_reason:
+                # Record what 'auto' resolved to so the client can explain it.
+                meta = fig_dict.setdefault('layout', {}).setdefault('meta', {})
+                if isinstance(meta, dict):
+                    meta['auto_recommendation'] = {'type': viz_type, 'columns': columns, 'reason': auto_reason}
             return json.loads(json.dumps(fig_dict, cls=NumpyEncoder))
             
         except Exception as e:

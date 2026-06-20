@@ -229,7 +229,12 @@ class VisualizationGenerator:
             
             if not columns:
                 raise ValueError("No columns selected")
-            
+
+            # Drop duplicate selections (keeping order). Selecting the same
+            # field twice would otherwise yield duplicate-named columns and a
+            # confusing "'DataFrame' object has no attribute 'dtype'" crash.
+            columns = list(dict.fromkeys(columns))
+
             # Verify all columns exist
             missing_cols = [col for col in columns if col not in self.df.columns]
             if missing_cols:

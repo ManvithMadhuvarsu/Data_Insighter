@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 from typing import Dict, List, Any
 import json
 import os
-from datetime import datetime
+from datetime import date, datetime
 import numpy as np
 from scipy import stats
 import warnings
@@ -30,6 +30,12 @@ class NumpyEncoder(json.JSONEncoder):
             return None
         elif isinstance(o, pd.Timestamp):
             return o.strftime('%Y-%m-%d %H:%M:%S')
+        elif isinstance(o, datetime):
+            return o.strftime('%Y-%m-%d %H:%M:%S')
+        elif isinstance(o, date):
+            return o.strftime('%Y-%m-%d')
+        elif isinstance(o, np.datetime64):
+            return pd.Timestamp(o).strftime('%Y-%m-%d %H:%M:%S')
         elif isinstance(o, pd.Series):
             return o.tolist()
         elif isinstance(o, pd.DataFrame):

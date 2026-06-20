@@ -424,8 +424,8 @@ class VisualizationGenerator:
                     q1 = df[columns[0]].quantile(0.25)
                     q3 = df[columns[0]].quantile(0.75)
                     iqr = q3 - q1
-                    outliers = df[df[columns[0]] > (q3 + 1.5 * iqr) | 
-                              df[columns[0]] < (q1 - 1.5 * iqr)]
+                    outliers = df[(df[columns[0]] > (q3 + 1.5 * iqr)) |
+                                  (df[columns[0]] < (q1 - 1.5 * iqr))]
                     
                     for _idx, row in outliers.iterrows():
                         fig.add_annotation(

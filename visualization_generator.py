@@ -499,6 +499,61 @@ class VisualizationGenerator:
                     labels={'x': columns[0], 'y': columns[1], 'color': 'Value'},
                 )
             
+            elif viz_type == 'area':
+                if len(columns) < 2:
+                    raise ValueError("Area chart requires at least 2 columns")
+                if pd.api.types.is_numeric_dtype(df[columns[0]]) or pd.api.types.is_datetime64_any_dtype(df[columns[0]]):
+                    df = df.sort_values(by=columns[0])
+                fig = px.area(df, x=columns[0], y=columns[1:],
+                              title=f'Area Chart of {", ".join(columns)}')
+
+            elif viz_type == 'donut':
+                if len(columns) != 2:
+                    raise ValueError("Donut chart requires exactly 2 columns")
+                if not pd.api.types.is_numeric_dtype(df[columns[1]]):
+                    agg_df = df.groupby(columns[0]).size().reset_index(name='count')
+                    fig = px.pie(agg_df, names=columns[0], values='count', hole=0.5,
+                                 title=f'Distribution of {columns[0]}')
+                else:
+                    agg_df = df.groupby(columns[0])[columns[1]].sum().reset_index()
+                    fig = px.pie(agg_df, names=columns[0], values=columns[1], hole=0.5,
+                                 title=f'Sum of {columns[1]} by {columns[0]}')
+
+            elif viz_type == 'treemap':
+                if len(columns) < 2:
+                    raise ValueError("Treemap requires a category column and a value column")
+                if pd.api.types.is_numeric_dtype(df[columns[-1]]):
+                    path_cols = columns[:-1]
+                    value_col = columns[-1]
+                    agg_df = df.groupby(path_cols)[value_col].sum().reset_index()
+                    fig = px.treemap(agg_df, path=path_cols, values=value_col,
+                                     title=f'{value_col} by {", ".join(path_cols)}')
+                else:
+                    agg_df = df.groupby(columns).size().reset_index(name='count')
+                    fig = px.treemap(agg_df, path=columns, values='count',
+                                     title=f'Record count by {", ".join(columns)}')
+
+            elif viz_type == 'funnel':
+                if len(columns) < 2:
+                    raise ValueError("Funnel chart requires a stage column and a numeric value column")
+                if not pd.api.types.is_numeric_dtype(df[columns[1]]):
+                    raise ValueError(f"Column {columns[1]} must be numeric for a funnel chart")
+                agg_df = (df.groupby(columns[0])[columns[1]].sum()
+                          .reset_index().sort_values(columns[1], ascending=False))
+                fig = px.funnel(agg_df, x=columns[1], y=columns[0],
+                                title=f'{columns[1]} funnel by {columns[0]}')
+
+            elif viz_type == 'bubble':
+                if len(columns) < 3:
+                    raise ValueError("Bubble chart requires 3 columns: x, y, and a size measure")
+                if not all(pd.api.types.is_numeric_dtype(df[col]) for col in columns[:3]):
+                    raise ValueError("Bubble chart requires numeric x, y, and size columns")
+                sized = df.assign(_bubble_size=df[columns[2]].abs())
+                color_col = columns[3] if len(columns) > 3 else None
+                fig = px.scatter(sized, x=columns[0], y=columns[1], size='_bubble_size',
+                                 color=color_col, size_max=40,
+                                 title=f'{columns[1]} vs {columns[0]} sized by {columns[2]}')
+
             else:
                 raise ValueError(f"Unsupported visualization type: {viz_type}")
             

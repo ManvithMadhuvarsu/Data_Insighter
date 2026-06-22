@@ -6,6 +6,11 @@ based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **Meaningful aggregation** for charts so high-cardinality or raw-row data no
+  longer renders as noise: line charts aggregate duplicate x values into one
+  point per period (sorted chronologically); bar charts sort by value and cap to
+  the top 25; pie/donut charts cap to the top 12 slices and bucket the remainder
+  into an exact-total "Other".
 - **Auto chart recommendation** (`chart_recommender.py`): a semantic-type-driven
   "auto visual" that picks the best chart for the selected columns, mirroring the
   Power BI / Fabric "Suggest a chart" experience. Available as the
@@ -25,3 +30,5 @@ based on [Keep a Changelog](https://keepachangelog.com/).
   `datetime`, `date`, and `numpy.datetime64`.
 - Selecting the **same column twice** crashed chart generation; duplicate
   selections are now collapsed.
+- **scatter trendlines** crashed on fresh installs because `statsmodels` (needed
+  by Plotly's OLS trendline) was missing from `requirements.txt`; now declared.

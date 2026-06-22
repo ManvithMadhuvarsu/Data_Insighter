@@ -95,6 +95,49 @@ def test_duplicate_columns_do_not_crash(sales_df):
     assert fig["data"]
 
 
+@pytest.fixture()
+def wide_df():
+    rng = np.random.default_rng(1)
+    n = 600
+    return pd.DataFrame(
+        {
+            "order_date": np.repeat(pd.date_range("2023-01-01", periods=30, freq="D"), 20),
+            "customer": [f"cust_{i % 80}" for i in range(n)],
+            "region": rng.choice(["North", "South", "East", "West"], size=n),
+            "revenue": rng.normal(1000, 200, size=n).round(2),
+        }
+    )
+
+
+def test_line_aggregates_duplicate_x(wide_df):
+    # 600 rows across 30 dates must collapse to 30 chronological points.
+    fig = _figure(wide_df, ["order_date", "revenue"], "line")
+    xs = list(fig["data"][0]["x"])
+    assert len(xs) == 30
+    assert xs == sorted(xs)
+
+
+def test_bar_caps_and_sorts_high_cardinality(wide_df):
+    fig = _figure(wide_df, ["customer", "revenue"], "bar")
+    ys = list(fig["data"][0]["y"])
+    assert len(ys) <= 25
+    assert ys == sorted(ys, reverse=True)
+
+
+def test_pie_buckets_into_other_and_preserves_total(wide_df):
+    fig = _figure(wide_df, ["customer", "revenue"], "pie")
+    labels = list(fig["data"][0]["labels"])
+    values = list(fig["data"][0]["values"])
+    assert "Other" in labels
+    assert len(labels) <= 13
+    assert abs(sum(values) - wide_df["revenue"].sum()) < 1e-6
+
+
+def test_line_without_numeric_y_raises(wide_df):
+    with pytest.raises(ValueError):
+        _figure(wide_df, ["order_date", "region"], "line")
+
+
 def test_kpi_card(sales_df):
     fig = _figure(sales_df, ["revenue"], "kpi")
     assert fig["data"]

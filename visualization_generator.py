@@ -469,10 +469,10 @@ class VisualizationGenerator:
                         points='all'
                     )
                     
-                    # Add statistical annotations for each group
-                    for group in df[columns[0]].unique():
-                        group_data = df[df[columns[0]] == group]
-                        fig = add_statistical_annotations(fig, group_data, columns[1])
+                    # Note: per-group stat annotations are intentionally omitted.
+                    # They previously all rendered at the same paper coordinate
+                    # and overlapped into an unreadable blob; the box glyphs and
+                    # hover already expose each group's quartiles and outliers.
 
             elif viz_type == 'kpi':
                 if not pd.api.types.is_numeric_dtype(df[columns[0]]):

@@ -220,6 +220,46 @@ class VisualizationGenerator:
                 working = working[dates <= pd.to_datetime(end_date, errors='coerce')]
 
         return working
+
+    # Readability caps so high-cardinality dimensions do not produce
+    # thousands of unreadable bars / hundreds of pie slices.
+    _MAX_BAR_CATEGORIES = 25
+    _MAX_PIE_SLICES = 12
+
+    def _aggregate_by_dimension(self, df, dimension, measure=None, aggfunc='sum'):
+        """Aggregate ``measure`` (or a row count) grouped by ``dimension``.
+
+        Returns ``(frame, value_col)`` sorted by the aggregate descending so
+        the most important categories read first, like Power BI's default
+        sort-by-value behavior.
+        """
+        if measure is None:
+            agg = df.groupby(dimension).size().reset_index(name='count')
+            value_col = 'count'
+        elif aggfunc == 'count':
+            agg = df.groupby(dimension)[measure].count().reset_index()
+            value_col = measure
+        else:
+            agg = df.groupby(dimension)[measure].sum().reset_index()
+            value_col = measure
+        return agg.sort_values(value_col, ascending=False).reset_index(drop=True), value_col
+
+    def _limit_categories(self, agg, value_col, top_n, other_bucket=False):
+        """Trim an aggregated frame to the top ``top_n`` rows.
+
+        When ``other_bucket`` is set the remaining rows are collapsed into a
+        single "Other" row (used for part-to-whole charts so the total stays
+        correct). Returns ``(frame, truncated)``.
+        """
+        if len(agg) <= top_n:
+            return agg, False
+        top = agg.head(top_n).copy()
+        if other_bucket:
+            dim_col = next(c for c in agg.columns if c != value_col)
+            other_value = agg[value_col].iloc[top_n:].sum()
+            other_row = pd.DataFrame([{dim_col: 'Other', value_col: other_value}])
+            top = pd.concat([top, other_row], ignore_index=True)
+        return top, True
         
     def generate_visualization(self, columns: List[str], viz_type: str, sample_percentage: int = 100, filters: Dict[str, Any] | None = None) -> Dict:
         """Generate a single visualization based on columns and type."""
@@ -292,43 +332,40 @@ class VisualizationGenerator:
             # Generate visualization based on type
             if viz_type == 'bar':
                 if len(columns) == 1:
-                    # For single column, show value counts
-                    value_counts = df[columns[0]].value_counts()
-                    fig = px.bar(
-                        x=value_counts.index,
-                        y=value_counts.values,
-                        title=f'Distribution of {columns[0]}',
-                        labels={'x': columns[0], 'y': 'Count'}
-                    )
+                    # Single column: rank values by frequency, capped for readability.
+                    agg_df, value_col = self._aggregate_by_dimension(df, columns[0])
+                    agg_df, truncated = self._limit_categories(agg_df, value_col, self._MAX_BAR_CATEGORIES)
+                    title = f'Distribution of {columns[0]}'
+                    if truncated:
+                        title += f' (top {self._MAX_BAR_CATEGORIES})'
+                    fig = px.bar(agg_df, x=columns[0], y=value_col, title=title,
+                                 labels={value_col: 'Count'})
                 else:
-                    # For multiple columns, use the first as x and others as y
+                    # First column groups; second is summed (numeric) or counted.
                     if pd.api.types.is_numeric_dtype(df[columns[1]]):
-                        # If second column is numeric, use sum aggregation
-                        agg_df = df.groupby(columns[0])[columns[1]].sum().reset_index()
-                        fig = px.bar(
-                            agg_df,
-                            x=columns[0],
-                            y=columns[1],
-                            title=f'Sum of {columns[1]} by {columns[0]}'
-                        )
+                        agg_df, value_col = self._aggregate_by_dimension(df, columns[0], columns[1], 'sum')
+                        title = f'Sum of {columns[1]} by {columns[0]}'
                     else:
-                        # If not numeric, use count
-                        agg_df = df.groupby(columns[0])[columns[1]].count().reset_index()
-                        fig = px.bar(
-                            agg_df,
-                            x=columns[0],
-                            y=columns[1],
-                            title=f'Count of {columns[1]} by {columns[0]}'
-                        )
+                        agg_df, value_col = self._aggregate_by_dimension(df, columns[0], columns[1], 'count')
+                        title = f'Count of {columns[1]} by {columns[0]}'
+                    agg_df, truncated = self._limit_categories(agg_df, value_col, self._MAX_BAR_CATEGORIES)
+                    if truncated:
+                        title += f' (top {self._MAX_BAR_CATEGORIES})'
+                    fig = px.bar(agg_df, x=columns[0], y=value_col, title=title)
             
             elif viz_type == 'line':
                 if len(columns) < 2:
                     raise ValueError("Line chart requires at least 2 columns")
-                # Ensure x-axis data is sorted
-                if pd.api.types.is_numeric_dtype(df[columns[0]]) or pd.api.types.is_datetime64_any_dtype(df[columns[0]]):
-                    df = df.sort_values(by=columns[0])
-                fig = px.line(df, x=columns[0], y=columns[1:],
-                            title=f'Line Chart of {", ".join(columns)}')
+                y_cols = [col for col in columns[1:] if pd.api.types.is_numeric_dtype(df[col])]
+                if not y_cols:
+                    raise ValueError("Line chart needs at least one numeric column to plot over the x-axis")
+                # Aggregate duplicate x values so the trend is a clean series
+                # instead of a zig-zag connecting every raw row.
+                if df[columns[0]].duplicated().any():
+                    df = df.groupby(columns[0], as_index=False)[y_cols].sum()
+                df = df.sort_values(by=columns[0])
+                fig = px.line(df, x=columns[0], y=y_cols,
+                              title=f'{", ".join(y_cols)} over {columns[0]}')
             
             elif viz_type == 'scatter':
                 if len(columns) < 2:
@@ -375,15 +412,13 @@ class VisualizationGenerator:
                 if len(columns) != 2:
                     raise ValueError("Pie chart requires exactly 2 columns")
                 if not pd.api.types.is_numeric_dtype(df[columns[1]]):
-                    # If second column is not numeric, use value counts
-                    agg_df = df.groupby(columns[0]).size().reset_index(name='count')
-                    fig = px.pie(agg_df, names=columns[0], values='count',
-                               title=f'Distribution of {columns[0]}')
+                    agg_df, value_col = self._aggregate_by_dimension(df, columns[0])
+                    title = f'Distribution of {columns[0]}'
                 else:
-                    # Use sum for numeric values
-                    agg_df = df.groupby(columns[0])[columns[1]].sum().reset_index()
-                    fig = px.pie(agg_df, names=columns[0], values=columns[1],
-                               title=f'Sum of {columns[1]} by {columns[0]}')
+                    agg_df, value_col = self._aggregate_by_dimension(df, columns[0], columns[1], 'sum')
+                    title = f'Sum of {columns[1]} by {columns[0]}'
+                agg_df, _ = self._limit_categories(agg_df, value_col, self._MAX_PIE_SLICES, other_bucket=True)
+                fig = px.pie(agg_df, names=columns[0], values=value_col, title=title)
             
             elif viz_type == 'histogram':
                 if not pd.api.types.is_numeric_dtype(df[columns[0]]):
@@ -516,13 +551,13 @@ class VisualizationGenerator:
                 if len(columns) != 2:
                     raise ValueError("Donut chart requires exactly 2 columns")
                 if not pd.api.types.is_numeric_dtype(df[columns[1]]):
-                    agg_df = df.groupby(columns[0]).size().reset_index(name='count')
-                    fig = px.pie(agg_df, names=columns[0], values='count', hole=0.5,
-                                 title=f'Distribution of {columns[0]}')
+                    agg_df, value_col = self._aggregate_by_dimension(df, columns[0])
+                    title = f'Distribution of {columns[0]}'
                 else:
-                    agg_df = df.groupby(columns[0])[columns[1]].sum().reset_index()
-                    fig = px.pie(agg_df, names=columns[0], values=columns[1], hole=0.5,
-                                 title=f'Sum of {columns[1]} by {columns[0]}')
+                    agg_df, value_col = self._aggregate_by_dimension(df, columns[0], columns[1], 'sum')
+                    title = f'Sum of {columns[1]} by {columns[0]}'
+                agg_df, _ = self._limit_categories(agg_df, value_col, self._MAX_PIE_SLICES, other_bucket=True)
+                fig = px.pie(agg_df, names=columns[0], values=value_col, hole=0.5, title=title)
 
             elif viz_type == 'treemap':
                 if len(columns) < 2:

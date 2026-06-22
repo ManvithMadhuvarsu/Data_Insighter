@@ -14,6 +14,8 @@ Data Insighter is a Flask-based data analysis workspace for uploading business d
 - Define reusable business measures
 - Refresh saved dataset versions, detect schema drift, and review workspace freshness states
 - Review sensitivity hints, activity history, and downstream dashboard/measure impact for the active dataset
+- Auto-recommend the best chart for the selected columns (Power BI / Fabric style "Suggest a chart")
+- Render interactive charts: bar, line, area, scatter, bubble, pie, donut, histogram, box, treemap, funnel, heatmap, and KPI cards
 - Build dashboard layouts from analysis charts and export dashboards as interactive HTML or PNG
 - Export executive reports as HTML or Markdown
 
@@ -32,6 +34,7 @@ Backend modules:
 - `measure_service.py` - reusable measure calculations
 - `transform_service.py` - dataset transformation operations
 - `visualization_generator.py` - Plotly chart generation and export
+- `chart_recommender.py` - semantic "auto visual" that picks the best chart type for selected columns
 - `workspace_store.py` - SQLite-backed persistence for datasets, dashboards, relationships, measures, refresh jobs, and audit events
 - `auth_store.py` - SQLite-backed account storage and legacy user migration
 - `report_service.py` - executive summary report generation
@@ -51,6 +54,28 @@ Frontend surface:
 - Account metadata is stored in SQLite and legacy `users.json` data is migrated on demand
 - The app uses Flask session cookies plus server-side workspace storage
 - If `SECRET_KEY` is not set, the app creates a stable local fallback key in `.local_secret_key`
+
+## Interactive visualizations
+
+Charts are generated server-side with Plotly and returned as JSON for the
+browser to render interactively (zoom, hover, legend toggles).
+
+Choosing `Auto (recommended)` in the analysis builder runs
+`chart_recommender.recommend_chart`, which classifies each selected column with
+the semantic engine (measure / dimension / datetime / identifier plus
+cardinality) and picks the most informative chart — for example:
+
+- a single measure → histogram
+- a date and a measure → line (time series)
+- two measures → scatter
+- a category and a measure → bar
+- two categories → heatmap
+
+The chosen type, column order, and a short reason are attached to the figure's
+`layout.meta.auto_recommendation` so the UI can explain the choice.
+
+Available chart types: `auto`, `bar`, `line`, `area`, `scatter`, `bubble`,
+`pie`, `donut`, `histogram`, `box`, `treemap`, `funnel`, `heatmap`, `kpi`.
 
 ## Supported file types
 

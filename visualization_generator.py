@@ -28,14 +28,19 @@ class NumpyEncoder(json.JSONEncoder):
             return bool(o)
         elif isinstance(o, (np.void)):
             return None
+        elif o is pd.NaT:
+            # NaT subclasses datetime, so it must be caught before the
+            # datetime branches; strftime on NaT raises.
+            return None
         elif isinstance(o, pd.Timestamp):
-            return o.strftime('%Y-%m-%d %H:%M:%S')
+            return None if pd.isna(o) else o.strftime('%Y-%m-%d %H:%M:%S')
         elif isinstance(o, datetime):
-            return o.strftime('%Y-%m-%d %H:%M:%S')
+            return None if pd.isna(o) else o.strftime('%Y-%m-%d %H:%M:%S')
         elif isinstance(o, date):
             return o.strftime('%Y-%m-%d')
         elif isinstance(o, np.datetime64):
-            return pd.Timestamp(o).strftime('%Y-%m-%d %H:%M:%S')
+            timestamp = pd.Timestamp(o)
+            return None if pd.isna(timestamp) else timestamp.strftime('%Y-%m-%d %H:%M:%S')
         elif isinstance(o, pd.Series):
             return o.tolist()
         elif isinstance(o, pd.DataFrame):
@@ -359,6 +364,9 @@ class VisualizationGenerator:
                 y_cols = [col for col in columns[1:] if pd.api.types.is_numeric_dtype(df[col])]
                 if not y_cols:
                     raise ValueError("Line chart needs at least one numeric column to plot over the x-axis")
+                # Drop rows with no x value; an undated point is meaningless on
+                # a trend axis (and NaT cannot be serialized).
+                df = df.dropna(subset=[columns[0]])
                 # Aggregate duplicate x values so the trend is a clean series
                 # instead of a zig-zag connecting every raw row.
                 if df[columns[0]].duplicated().any():
@@ -542,10 +550,19 @@ class VisualizationGenerator:
             elif viz_type == 'area':
                 if len(columns) < 2:
                     raise ValueError("Area chart requires at least 2 columns")
+                y_cols = [col for col in columns[1:] if pd.api.types.is_numeric_dtype(df[col])]
+                if not y_cols:
+                    raise ValueError("Area chart needs at least one numeric column to plot over the x-axis")
+                # Drop rows with no x value, then aggregate duplicate x so the
+                # filled area reads as a clean series instead of overlapping
+                # raw rows.
+                df = df.dropna(subset=[columns[0]])
+                if df[columns[0]].duplicated().any():
+                    df = df.groupby(columns[0], as_index=False)[y_cols].sum()
                 if pd.api.types.is_numeric_dtype(df[columns[0]]) or pd.api.types.is_datetime64_any_dtype(df[columns[0]]):
                     df = df.sort_values(by=columns[0])
-                fig = px.area(df, x=columns[0], y=columns[1:],
-                              title=f'Area Chart of {", ".join(columns)}')
+                fig = px.area(df, x=columns[0], y=y_cols,
+                              title=f'{", ".join(y_cols)} over {columns[0]}')
 
             elif viz_type == 'donut':
                 if len(columns) != 2:

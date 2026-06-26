@@ -138,6 +138,25 @@ def test_line_without_numeric_y_raises(wide_df):
         _figure(wide_df, ["order_date", "region"], "line")
 
 
+@pytest.mark.parametrize("viz_type", ["line", "area"])
+def test_time_series_with_missing_dates_serialize(viz_type):
+    # Regression: a NaT in the date axis crashed serialization
+    # ("NaTType does not support strftime"). Rows are unique so no
+    # aggregation masks the NaT.
+    df = pd.DataFrame(
+        {
+            "order_date": pd.to_datetime(
+                ["2023-01-01", "2023-01-02", None, "2023-01-04", "2023-01-05"]
+            ),
+            "revenue": [10.0, 20.0, 30.0, 40.0, 50.0],
+        }
+    )
+    fig = _figure(df, ["order_date", "revenue"], viz_type)
+    json.dumps(fig, cls=NumpyEncoder)
+    # The undated row is dropped, leaving four points.
+    assert len(fig["data"][0]["x"]) == 4
+
+
 def test_kpi_card(sales_df):
     fig = _figure(sales_df, ["revenue"], "kpi")
     assert fig["data"]

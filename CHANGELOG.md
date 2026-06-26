@@ -32,3 +32,6 @@ based on [Keep a Changelog](https://keepachangelog.com/).
   selections are now collapsed.
 - **scatter trendlines** crashed on fresh installs because `statsmodels` (needed
   by Plotly's OLS trendline) was missing from `requirements.txt`; now declared.
+- **Time-series charts with missing dates (NaT)** crashed with "NaTType does not
+  support strftime" (found by auto-composing a dashboard on the Spotify sample).
+  `NumpyEncoder` now treats NaT as null and line/area charts drop undated rows.

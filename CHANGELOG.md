@@ -23,6 +23,10 @@ based on [Keep a Changelog](https://keepachangelog.com/).
   and a GitHub Actions CI workflow (lint + tests on Python 3.10/3.11).
 
 ### Fixed
+- **Charts never rendered in the browser**: the templates loaded
+  `cdn.plot.ly/plotly-latest.min.js`, which is frozen at Plotly.js v1.58.5
+  (2021) and cannot parse the Plotly 5.17 figure JSON the backend emits — the
+  canvas hung on "Generating visualization...". Pinned to `plotly-2.26.0`.
 - Single-column **box plots** crashed because the outlier mask used
   `a > x | b < y` without parentheses (operator precedence). Now wrapped.
 - **Datetime-axis charts** (line/area/time-series) failed to serialize with

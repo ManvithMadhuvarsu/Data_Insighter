@@ -21,3 +21,7 @@ ENV/
 .DS_Store
 Thumbs.db
 *.pyc
+
+# Local scratch and editor/agent working files
+scratch/
+.claude/
